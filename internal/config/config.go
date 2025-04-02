@@ -9,6 +9,18 @@ import (
 type Config struct {
 	DBUrl           string `json:"db_url"`
 	CurrentUserName string `json:"current_user_name"`
+	VimMode         bool   `json:"vim_mode"`
+}
+
+func (c *Config) SetUser(userName string) error {
+	c.CurrentUserName = userName
+
+	return write(*c)
+}
+
+func (c *Config) SetVimMode(enabled bool) error {
+	c.VimMode = enabled
+	return write(*c)
 }
 
 const configFileName = ".gatorconfig.json"
@@ -35,12 +47,6 @@ func write(cfg Config) error {
 	}
 
 	return os.WriteFile(configPath, jsonData, 0644)
-}
-
-func (c *Config) SetUser(userName string) error {
-	c.CurrentUserName = userName
-
-	return write(*c)
 }
 
 func Read() (*Config, error) {
