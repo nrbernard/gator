@@ -10,6 +10,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/nrbernard/gator/internal/config"
 	"github.com/nrbernard/gator/internal/database"
+	"github.com/nrbernard/gator/internal/rss"
 )
 
 type state struct {
@@ -106,6 +107,21 @@ func handlerRegister(s *state, cmd command) error {
 	return nil
 }
 
+func handlerAgg(s *state, cmd command) error {
+	feedURL := "https://www.wagslane.dev/index.xml"
+	if len(cmd.args) > 0 {
+		feedURL = cmd.args[0]
+	}
+
+	feed, err := rss.FetchFeed(context.Background(), feedURL)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed: %s", err)
+	}
+
+	fmt.Printf("Feed: %+v\n", feed)
+	return nil
+}
+
 func main() {
 	configFile, err := config.Read()
 	if err != nil {
@@ -134,6 +150,7 @@ func main() {
 	commands.register("register", handlerRegister)
 	commands.register("reset", handlerReset)
 	commands.register("users", handlerListUsers)
+	commands.register("agg", handlerAgg)
 
 	args := os.Args[1:]
 	if len(args) == 0 {
