@@ -66,6 +66,24 @@ func handlerReset(s *state, cmd command) error {
 	return nil
 }
 
+func handlerListUsers(s *state, cmd command) error {
+	users, err := s.db.GetUsers(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get users: %s", err)
+	}
+
+	currentUser := s.config.GetUser()
+	for _, user := range users {
+		suffix := ""
+		if user.Name == currentUser {
+			suffix = " (current)"
+		}
+		fmt.Println(user.Name + suffix)
+	}
+
+	return nil
+}
+
 func handlerRegister(s *state, cmd command) error {
 	if len(cmd.args) < 1 {
 		return fmt.Errorf("username required")
@@ -115,6 +133,7 @@ func main() {
 	commands.register("login", handlerLogin)
 	commands.register("register", handlerRegister)
 	commands.register("reset", handlerReset)
+	commands.register("users", handlerListUsers)
 
 	args := os.Args[1:]
 	if len(args) == 0 {

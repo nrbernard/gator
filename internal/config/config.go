@@ -17,6 +17,10 @@ func (c *Config) SetUser(userName string) error {
 	return write(*c)
 }
 
+func (c *Config) GetUser() string {
+	return c.CurrentUserName
+}
+
 const configFileName = ".gatorconfig.json"
 
 func getConfigFilePath() (string, error) {
