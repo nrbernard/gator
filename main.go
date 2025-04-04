@@ -56,6 +56,16 @@ func handlerLogin(s *state, cmd command) error {
 	return nil
 }
 
+func handlerReset(s *state, cmd command) error {
+	if err := s.db.DeleteUsers(context.Background()); err != nil {
+		return fmt.Errorf("failed to delete users: %s", err)
+	}
+
+	fmt.Println("Users deleted")
+
+	return nil
+}
+
 func handlerRegister(s *state, cmd command) error {
 	if len(cmd.args) < 1 {
 		return fmt.Errorf("username required")
@@ -104,6 +114,7 @@ func main() {
 
 	commands.register("login", handlerLogin)
 	commands.register("register", handlerRegister)
+	commands.register("reset", handlerReset)
 
 	args := os.Args[1:]
 	if len(args) == 0 {
