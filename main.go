@@ -149,6 +149,23 @@ func handlerAddFeed(s *state, cmd command) error {
 	return nil
 }
 
+func handlerListFeeds(s *state, cmd command) error {
+	feeds, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get feeds: %s", err)
+	}
+
+	for _, feed := range feeds {
+		if err != nil {
+			return fmt.Errorf("failed to get user: %s", err)
+		}
+
+		fmt.Printf("%s (%s) - %s\n", feed.Name, feed.Url, feed.UserName)
+	}
+
+	return nil
+}
+
 func main() {
 	configFile, err := config.Read()
 	if err != nil {
@@ -179,6 +196,7 @@ func main() {
 	commands.register("users", handlerListUsers)
 	commands.register("agg", handlerAgg)
 	commands.register("addfeed", handlerAddFeed)
+	commands.register("feeds", handlerListFeeds)
 
 	args := os.Args[1:]
 	if len(args) == 0 {
@@ -195,6 +213,4 @@ func main() {
 		fmt.Printf("Error: %s\n", err)
 		os.Exit(1)
 	}
-
-	fmt.Printf("Config: %+v\n", configFile)
 }
