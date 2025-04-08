@@ -174,10 +174,6 @@ func handlerListFeeds(s *state, cmd command) error {
 	}
 
 	for _, feed := range feeds {
-		if err != nil {
-			return fmt.Errorf("failed to get user: %s", err)
-		}
-
 		fmt.Printf("%s (%s) - %s\n", feed.Name, feed.Url, feed.UserName)
 	}
 
@@ -240,6 +236,19 @@ func handlerUnfollowFeed(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+func parseDate(date string) time.Time {
+	// Mon, 01 Jan 0001 00:00:00 +0000
+	fmt.Printf("parsing date: %s\n", date)
+
+	parsed, err := time.Parse(time.RFC1123Z, date)
+	if err != nil {
+		fmt.Printf("failed to parse date: %s\n", err)
+		return time.Time{}
+	}
+
+	return parsed
+}
+
 func scrapeFeeds(s *state) error {
 	feed, err := s.db.GetNextFeedToFetch(context.Background())
 	if err != nil {
@@ -256,7 +265,16 @@ func scrapeFeeds(s *state) error {
 	}
 
 	for _, item := range feedData.Channel.Item {
-		fmt.Printf("Scraping feed: %s\n", item.Title)
+		if _, err := s.db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          uuid.New(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: true},
+			PublishedAt: parseDate(item.PubDate),
+			FeedID:      feed.ID,
+		}); err != nil {
+			fmt.Printf("failed to create post: %s\n", err)
+		}
 	}
 
 	return nil
