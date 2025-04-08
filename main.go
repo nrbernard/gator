@@ -218,6 +218,24 @@ func handlerListFollowedFeeds(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+func handlerUnfollowFeed(s *state, cmd command, user database.User) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("feed URL required")
+	}
+
+	feedURL := cmd.args[0]
+
+	if err := s.db.DeleteFeedFollow(context.Background(), database.DeleteFeedFollowParams{
+		UserID: user.ID,
+		Url:    feedURL,
+	}); err != nil {
+		return fmt.Errorf("failed to delete feed follow: %s", err)
+	}
+
+	fmt.Printf("%s unfollowed %s\n", user.Name, feedURL)
+	return nil
+}
+
 func main() {
 	configFile, err := config.Read()
 	if err != nil {
@@ -251,7 +269,7 @@ func main() {
 	commands.register("feeds", handlerListFeeds)
 	commands.register("follow", middlewareLoggedIn(handlerFollowFeed))
 	commands.register("following", middlewareLoggedIn(handlerListFollowedFeeds))
-
+	commands.register("unfollow", middlewareLoggedIn(handlerUnfollowFeed))
 	args := os.Args[1:]
 	if len(args) == 0 {
 		fmt.Println("Please specify a command")
