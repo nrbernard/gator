@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -119,18 +120,21 @@ func handlerRegister(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	feedURL := "https://www.wagslane.dev/index.xml"
-	if len(cmd.args) > 0 {
-		feedURL = cmd.args[0]
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("fetch interval required")
 	}
 
-	feed, err := rss.FetchFeed(context.Background(), feedURL)
+	fetchInterval, err := time.ParseDuration(cmd.args[0])
 	if err != nil {
-		return fmt.Errorf("failed to fetch feed: %s", err)
+		return fmt.Errorf("failed to parse time between scrapes: %s", err)
 	}
 
-	fmt.Printf("Feed: %+v\n", feed)
-	return nil
+	fmt.Printf("Collecting feeds every %s\n", fetchInterval)
+
+	ticker := time.NewTicker(fetchInterval)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
@@ -236,6 +240,28 @@ func handlerUnfollowFeed(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+func scrapeFeeds(s *state) error {
+	feed, err := s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to get feeds: %s", err)
+	}
+
+	if err := s.db.MarkFeedAsFetched(context.Background(), feed.ID); err != nil {
+		return fmt.Errorf("failed to mark feed as fetched: %s", err)
+	}
+
+	feedData, err := rss.FetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed: %s", err)
+	}
+
+	for _, item := range feedData.Channel.Item {
+		fmt.Printf("Scraping feed: %s\n", item.Title)
+	}
+
+	return nil
+}
+
 func main() {
 	configFile, err := config.Read()
 	if err != nil {
@@ -270,6 +296,7 @@ func main() {
 	commands.register("follow", middlewareLoggedIn(handlerFollowFeed))
 	commands.register("following", middlewareLoggedIn(handlerListFollowedFeeds))
 	commands.register("unfollow", middlewareLoggedIn(handlerUnfollowFeed))
+
 	args := os.Args[1:]
 	if len(args) == 0 {
 		fmt.Println("Please specify a command")
