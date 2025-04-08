@@ -38,6 +38,17 @@ func (c *commands) run(s *state, cmd command) error {
 	return fmt.Errorf("unknown command: %s", cmd.name)
 }
 
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		user, err := s.db.GetUser(context.Background(), s.config.GetUser())
+		if err != nil {
+			return fmt.Errorf("failed to get user: %s", err)
+		}
+
+		return handler(s, cmd, user)
+	}
+}
+
 func handlerLogin(s *state, cmd command) error {
 	if len(cmd.args) < 1 {
 		return fmt.Errorf("username required")
@@ -122,14 +133,9 @@ func handlerAgg(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.args) < 2 {
 		return fmt.Errorf("feed URL and name required")
-	}
-
-	user, err := s.db.GetUser(context.Background(), s.config.GetUser())
-	if err != nil {
-		return fmt.Errorf("failed to get user: %s", err)
 	}
 
 	feedName := cmd.args[0]
@@ -143,6 +149,14 @@ func handlerAddFeed(s *state, cmd command) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create feed: %s", err)
+	}
+
+	if _, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:     uuid.New(),
+		UserID: user.ID,
+		FeedID: feed.ID,
+	}); err != nil {
+		return fmt.Errorf("failed to create feed follow: %s", err)
 	}
 
 	fmt.Printf("Feed created: %+v\n", feed)
@@ -161,6 +175,44 @@ func handlerListFeeds(s *state, cmd command) error {
 		}
 
 		fmt.Printf("%s (%s) - %s\n", feed.Name, feed.Url, feed.UserName)
+	}
+
+	return nil
+}
+
+func handlerFollowFeed(s *state, cmd command, user database.User) error {
+	if len(cmd.args) < 1 {
+		return fmt.Errorf("feed URL required")
+	}
+
+	feedURL := cmd.args[0]
+
+	feed, err := s.db.GetFeedByUrl(context.Background(), feedURL)
+	if err != nil {
+		return fmt.Errorf("failed to get feed: %s", err)
+	}
+
+	feedFollow, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:     uuid.New(),
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create feed follow: %s", err)
+	}
+
+	fmt.Printf("%s followed %s\n", feedFollow.UserName, feedFollow.FeedName)
+	return nil
+}
+
+func handlerListFollowedFeeds(s *state, cmd command, user database.User) error {
+	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get feeds: %s", err)
+	}
+
+	for _, feed := range feeds {
+		fmt.Printf("%s\n", feed.FeedName)
 	}
 
 	return nil
@@ -195,8 +247,10 @@ func main() {
 	commands.register("reset", handlerReset)
 	commands.register("users", handlerListUsers)
 	commands.register("agg", handlerAgg)
-	commands.register("addfeed", handlerAddFeed)
+	commands.register("addfeed", middlewareLoggedIn(handlerAddFeed))
 	commands.register("feeds", handlerListFeeds)
+	commands.register("follow", middlewareLoggedIn(handlerFollowFeed))
+	commands.register("following", middlewareLoggedIn(handlerListFollowedFeeds))
 
 	args := os.Args[1:]
 	if len(args) == 0 {
