@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -192,6 +193,17 @@ func handlerFollowFeed(s *state, cmd command, user database.User) error {
 		return fmt.Errorf("failed to get feed: %s", err)
 	}
 
+	follows, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get feed follows: %s", err)
+	}
+
+	for _, follow := range follows {
+		if follow.FeedID == feed.ID {
+			return fmt.Errorf("you are already following this feed")
+		}
+	}
+
 	feedFollow, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
 		ID:     uuid.New(),
 		UserID: user.ID,
@@ -233,6 +245,33 @@ func handlerUnfollowFeed(s *state, cmd command, user database.User) error {
 	}
 
 	fmt.Printf("%s unfollowed %s\n", user.Name, feedURL)
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	postCount := 2
+	if len(cmd.args) > 0 {
+		count, err := strconv.Atoi(cmd.args[0])
+		if err == nil {
+			postCount = count
+		}
+	}
+
+	fmt.Printf("id: %s\n", user.ID)
+
+	posts, err := s.db.GetPostsByUser(context.Background(), database.GetPostsByUserParams{
+		UserID: user.ID,
+		Limit:  int32(postCount),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get posts: %s", err)
+	}
+
+	for _, post := range posts {
+		fmt.Printf("%s\n", post.Title)
+		fmt.Printf("%s\n\n", post.Url)
+	}
+
 	return nil
 }
 
@@ -314,6 +353,7 @@ func main() {
 	commands.register("follow", middlewareLoggedIn(handlerFollowFeed))
 	commands.register("following", middlewareLoggedIn(handlerListFollowedFeeds))
 	commands.register("unfollow", middlewareLoggedIn(handlerUnfollowFeed))
+	commands.register("browse", middlewareLoggedIn(handlerBrowse))
 
 	args := os.Args[1:]
 	if len(args) == 0 {
