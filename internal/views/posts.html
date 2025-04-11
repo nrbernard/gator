@@ -1,0 +1,10 @@
+{{ define "posts" }}
+<div id="posts">
+    {{ range . }}
+    <div class="post">
+        <a href="{{ .Link }}" target="_blank">{{ .Title }}</a>
+        <p>{{ .Content }}</p>
+    </div>
+    {{ end }}
+</div>
+{{ end }}
