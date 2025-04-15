@@ -1,12 +1,21 @@
 package main
 
 import (
+	"database/sql"
+	"fmt"
 	"html/template"
 	"io"
-	"net/http"
+	"os"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echoMiddleware "github.com/labstack/echo/v4/middleware"
+	_ "github.com/lib/pq"
+	"github.com/nrbernard/gator/internal/config"
+	"github.com/nrbernard/gator/internal/database"
+	"github.com/nrbernard/gator/internal/handler"
+	"github.com/nrbernard/gator/internal/middleware"
+	"github.com/nrbernard/gator/internal/models"
+	"github.com/nrbernard/gator/internal/service"
 )
 
 type Template struct {
@@ -23,26 +32,34 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.tmpl.ExecuteTemplate(w, name, data)
 }
 
+type Page struct {
+	Posts []models.Post
+}
+
 func main() {
+	configFile, err := config.Read()
+	if err != nil {
+		fmt.Printf("Failed to read config: %s\n", err)
+		os.Exit(1)
+	}
+
 	e := echo.New()
-
 	e.Renderer = newTemplate()
-	e.Use(middleware.Logger())
+	e.Use(echoMiddleware.Logger())
+	e.Use(middleware.CurrentUser(configFile))
 
-	e.GET("/", func(c echo.Context) error {
-		return c.Render(http.StatusOK, "index.html", map[string]interface{}{
-			"Posts": []map[string]interface{}{
-				{
-					"Title": "Post 1",
-					"Link":  "https://example.com/post1",
-				},
-				{
-					"Title": "Post 2",
-					"Link":  "https://example.com/post2",
-				},
-			},
-		})
-	})
+	db, err := sql.Open("postgres", configFile.DBUrl)
+	if err != nil {
+		fmt.Printf("Failed to connect to database: %s\n", err)
+		os.Exit(1)
+	}
+
+	dbQueries := database.New(db)
+	postService := &service.PostService{Repo: dbQueries}
+	userService := &service.UserService{Repo: dbQueries}
+	postHandler := &handler.PostHandler{PostService: postService, UserService: userService}
+
+	e.GET("/", postHandler.Index)
 
 	e.Start(":8080")
 }
