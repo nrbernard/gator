@@ -10,7 +10,7 @@ run-cli:
 	go run cmd/cli/main.go
 
 run-server:
-	go run cmd/server/main.go
+	air
 
 migrate-up:
 	goose -dir sql/schema postgres "postgres://nick.bernard:@localhost:5432/gator" up
