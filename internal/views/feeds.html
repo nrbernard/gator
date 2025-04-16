@@ -4,14 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Gator is a simple RSS feed reader" />
-    <title>Gator</title>
+    <title>Feeds - Gator</title>
     <script src="https://unpkg.com/htmx.org/dist/htmx.js"></script>
   </head>
   <body>
     <main>
-      <h1>Gator</h1>
+        <h1><a href="/">Gator</a></h1>
 
-      {{ template "posts" .Posts }}
+        <h2>Feeds</h2>
+        
+        <div id="feeds">
+            {{ range .Feeds }}
+            <div class="feed">
+                <a href="{{ .Url }}" target="_blank">{{ .Name }}</a>
+            </div>
+            {{ end }}
+        </div>
     </main>
 
     <script type="text/javascript">
@@ -32,3 +40,4 @@
     </script>
   </body>
 </html>
+
