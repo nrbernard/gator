@@ -55,15 +55,19 @@ func main() {
 	}
 
 	dbQueries := database.New(db)
+
 	userService := &service.UserService{Repo: dbQueries}
 	postService := &service.PostService{Repo: dbQueries}
 	feedService := &service.FeedService{Repo: dbQueries}
+
 	postHandler := &handler.PostHandler{PostService: postService, UserService: userService}
 	feedHandler := &handler.FeedHandler{FeedService: feedService, UserService: userService}
 
 	e.GET("/", postHandler.Index)
 
 	e.GET("/feeds", feedHandler.Index)
+
+	e.POST("/feeds", feedHandler.Create)
 
 	e.Start(":8080")
 }

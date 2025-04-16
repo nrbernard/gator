@@ -12,6 +12,12 @@ type FeedService struct {
 	Repo *database.Queries
 }
 
+type CreateFeedParams struct {
+	Name   string
+	Url    string
+	UserID uuid.UUID
+}
+
 func (s *FeedService) ListFeeds(ctx context.Context, userID uuid.UUID) ([]models.Feed, error) {
 	dbFeeds, err := s.Repo.GetFeeds(ctx)
 	if err != nil {
@@ -26,4 +32,31 @@ func (s *FeedService) ListFeeds(ctx context.Context, userID uuid.UUID) ([]models
 		})
 	}
 	return feeds, nil
+}
+
+func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (models.Feed, error) {
+	dbFeed, err := s.Repo.CreateFeed(ctx, database.CreateFeedParams{
+		ID:     uuid.New(),
+		Name:   params.Name,
+		Url:    params.Url,
+		UserID: params.UserID,
+	})
+	if err != nil {
+		return models.Feed{}, err
+	}
+
+	if _, err := s.Repo.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:     uuid.New(),
+		UserID: params.UserID,
+		FeedID: dbFeed.ID,
+	}); err != nil {
+		return models.Feed{}, err
+	}
+
+	feed := models.Feed{
+		Name: dbFeed.Name,
+		Url:  dbFeed.Url,
+	}
+
+	return feed, nil
 }
