@@ -13,32 +13,26 @@ import (
 )
 
 const createFeed = `-- name: CreateFeed :one
-INSERT INTO feeds (id, created_at, updated_at, name, url, user_id)
+INSERT INTO feeds (id, name, url, user_id)
 VALUES (
     $1,
     $2,
     $3,
-    $4,
-    $5,
-    $6
+    $4
 )
 RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at
 `
 
 type CreateFeedParams struct {
-	ID        uuid.UUID
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Name      string
-	Url       string
-	UserID    uuid.UUID
+	ID     uuid.UUID
+	Name   string
+	Url    string
+	UserID uuid.UUID
 }
 
 func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error) {
 	row := q.db.QueryRowContext(ctx, createFeed,
 		arg.ID,
-		arg.CreatedAt,
-		arg.UpdatedAt,
 		arg.Name,
 		arg.Url,
 		arg.UserID,
@@ -196,6 +190,7 @@ const getFeeds = `-- name: GetFeeds :many
 SELECT f.name, f.url, u.name as user_name 
 FROM feeds f
 JOIN users u ON f.user_id = u.id
+ORDER BY f.created_at DESC
 `
 
 type GetFeedsRow struct {
