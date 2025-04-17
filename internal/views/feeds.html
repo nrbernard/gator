@@ -21,8 +21,9 @@
 {{ end }}
 
 {{ block "feed" . }}
-<li class="feed">
+<li class="feed" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
   <a href="{{ .Url }}" target="_blank">{{ .Name }}</a>
+  <button hx-delete="/feeds/{{ .ID }}" hx-swap="outerHTML" hx-target="closest li.feed" hx-confirm="Are you sure you want to delete this feed?">Delete</button>
 </li>
 {{ end }}
 

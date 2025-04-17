@@ -27,6 +27,7 @@ func (s *FeedService) ListFeeds(ctx context.Context, userID uuid.UUID) ([]models
 	var feeds []models.Feed
 	for _, dbFeed := range dbFeeds {
 		feeds = append(feeds, models.Feed{
+			ID:   dbFeed.ID,
 			Name: dbFeed.Name,
 			Url:  dbFeed.Url,
 		})
@@ -54,9 +55,18 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 	}
 
 	feed := models.Feed{
+		ID:   dbFeed.ID,
 		Name: dbFeed.Name,
 		Url:  dbFeed.Url,
 	}
 
 	return feed, nil
+}
+
+func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
+	if err := s.Repo.DeleteFeed(ctx, id); err != nil {
+		return err
+	}
+
+	return nil
 }

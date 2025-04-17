@@ -64,10 +64,9 @@ func main() {
 	feedHandler := &handler.FeedHandler{FeedService: feedService, UserService: userService}
 
 	e.GET("/", postHandler.Index)
-
 	e.GET("/feeds", feedHandler.Index)
-
 	e.POST("/feeds", feedHandler.Create)
+	e.DELETE("/feeds/:id", feedHandler.Delete)
 
 	e.Start(":8080")
 }

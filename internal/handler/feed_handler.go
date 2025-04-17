@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/nrbernard/gator/internal/models"
 	"github.com/nrbernard/gator/internal/service"
@@ -81,4 +82,17 @@ func (h *FeedHandler) Create(c echo.Context) error {
 	}
 
 	return c.Render(http.StatusOK, "oob-feed", feed)
+}
+
+func (h *FeedHandler) Delete(c echo.Context) error {
+	feedID := c.Param("id")
+	if feedID == "" {
+		return fmt.Errorf("failed to get feed id")
+	}
+
+	if err := h.FeedService.DeleteFeed(c.Request().Context(), uuid.MustParse(feedID)); err != nil {
+		return c.String(http.StatusNotFound, "failed to delete feed")
+	}
+
+	return c.NoContent(http.StatusOK)
 }

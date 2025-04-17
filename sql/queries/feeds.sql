@@ -9,7 +9,7 @@ VALUES (
 RETURNING *;
 
 -- name: GetFeeds :many
-SELECT f.name, f.url, u.name as user_name 
+SELECT f.id, f.name, f.url, u.name as user_name 
 FROM feeds f
 JOIN users u ON f.user_id = u.id
 ORDER BY f.created_at DESC;
@@ -37,6 +37,9 @@ FROM feed_follows
 JOIN feeds f ON feed_follows.feed_id = f.id
 JOIN users u ON feed_follows.user_id = u.id
 WHERE feed_follows.user_id = $1;
+
+-- name: DeleteFeed :exec
+DELETE FROM feeds WHERE id = $1;
 
 -- name: DeleteFeedFollow :exec
 DELETE FROM feed_follows WHERE feed_follows.user_id = $1 AND feed_follows.feed_id = (SELECT id FROM feeds WHERE url = $2);
