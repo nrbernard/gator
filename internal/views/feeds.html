@@ -3,14 +3,32 @@
   <div>
     <label for="url">
       <span>URL</span>
-      <input id="url" type="text" name="url" placeholder="URL" />
+      <input id="url" type="text" name="url" placeholder="URL" 
+      {{ if .Values }}
+        {{ if .Values.url }}
+          value="{{ .Values.url }}"
+        {{ end }}
+      {{ end }} 
+      />
     </label>
+
+    {{ if .Errors }}
+      {{ if .Errors.url }}
+        <div class="error" style="color: red;">{{ .Errors.url }}</div>
+      {{ end }}
+    {{ end }}
   </div>
 
   <div>
     <label for="name">
       <span>Name</span>
-      <input id="name" type="text" name="name" placeholder="Name" />
+      <input id="name" type="text" name="name" placeholder="Name" 
+      {{ if .Values }}
+        {{ if .Values.name }}
+          value="{{ .Values.name }}"
+        {{ end }}
+      {{ end }} 
+      />
     </label>
   </div>
 

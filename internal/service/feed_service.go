@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
@@ -36,6 +37,11 @@ func (s *FeedService) ListFeeds(ctx context.Context, userID uuid.UUID) ([]models
 }
 
 func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (models.Feed, error) {
+	_, err := s.Repo.GetFeedByUrl(ctx, params.Url)
+	if err == nil {
+		return models.Feed{}, fmt.Errorf("a feed with URL %s already exists", params.Url)
+	}
+
 	dbFeed, err := s.Repo.CreateFeed(ctx, database.CreateFeedParams{
 		ID:     uuid.New(),
 		Name:   params.Name,

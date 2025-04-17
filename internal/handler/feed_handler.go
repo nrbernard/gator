@@ -66,13 +66,26 @@ func (h *FeedHandler) Create(c echo.Context) error {
 		return fmt.Errorf("failed to get user: %s", err)
 	}
 
+	name := c.FormValue("name")
+	url := c.FormValue("url")
+
 	feed, err := h.FeedService.CreateFeed(c.Request().Context(), service.CreateFeedParams{
-		Name:   c.FormValue("name"),
-		Url:    c.FormValue("url"),
+		Name:   name,
+		Url:    url,
 		UserID: user.ID,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create feed: %s", err)
+		formData := FormData{
+			Errors: map[string]string{
+				"url": "There is already a feed with this URL",
+			},
+			Values: map[string]string{
+				"url":  url,
+				"name": name,
+			},
+		}
+
+		return c.Render(http.StatusUnprocessableEntity, "feed-form", formData)
 	}
 
 	formData := NewFormData()
