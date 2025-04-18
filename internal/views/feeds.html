@@ -20,19 +20,6 @@
   </div>
 
   <div>
-    <label for="name">
-      <span>Name</span>
-      <input id="name" type="text" name="name" placeholder="Name" 
-      {{ if .Values }}
-        {{ if .Values.name }}
-          value="{{ .Values.name }}"
-        {{ end }}
-      {{ end }} 
-      />
-    </label>
-  </div>
-
-  <div>
     <button type="submit">Add</button>
   </div>
 </form>
@@ -40,7 +27,13 @@
 
 {{ block "feed" . }}
 <li class="feed" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-  <a href="{{ .Url }}" target="_blank">{{ .Name }}</a>
+  <div>
+    <a href="{{ .Url }}" target="_blank">{{ .Name }}</a>
+    {{ if .Description }}
+      <p>{{ .Description }}</p>
+    {{ end }}
+  </div>
+
   <button hx-delete="/feeds/{{ .ID }}" hx-swap="outerHTML" hx-target="closest li.feed" hx-confirm="Are you sure you want to delete this feed?">Delete</button>
 </li>
 {{ end }}

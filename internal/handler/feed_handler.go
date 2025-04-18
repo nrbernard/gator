@@ -66,11 +66,9 @@ func (h *FeedHandler) Create(c echo.Context) error {
 		return fmt.Errorf("failed to get user: %s", err)
 	}
 
-	name := c.FormValue("name")
 	url := c.FormValue("url")
 
 	feed, err := h.FeedService.CreateFeed(c.Request().Context(), service.CreateFeedParams{
-		Name:   name,
 		Url:    url,
 		UserID: user.ID,
 	})
@@ -80,8 +78,7 @@ func (h *FeedHandler) Create(c echo.Context) error {
 				"url": "There is already a feed with this URL",
 			},
 			Values: map[string]string{
-				"url":  url,
-				"name": name,
+				"url": url,
 			},
 		}
 

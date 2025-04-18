@@ -7,27 +7,30 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 const createFeed = `-- name: CreateFeed :one
-INSERT INTO feeds (id, name, url, user_id)
+INSERT INTO feeds (id, name, url, description, user_id)
 VALUES (
     $1,
     $2,
     $3,
-    $4
+    $4,
+    $5
 )
-RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at
+RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description
 `
 
 type CreateFeedParams struct {
-	ID     uuid.UUID
-	Name   string
-	Url    string
-	UserID uuid.UUID
+	ID          uuid.UUID
+	Name        string
+	Url         string
+	Description sql.NullString
+	UserID      uuid.UUID
 }
 
 func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error) {
@@ -35,6 +38,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		arg.ID,
 		arg.Name,
 		arg.Url,
+		arg.Description,
 		arg.UserID,
 	)
 	var i Feed
@@ -46,6 +50,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.Url,
 		&i.UserID,
 		&i.LastFetchedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -128,7 +133,7 @@ func (q *Queries) DeleteFeedFollow(ctx context.Context, arg DeleteFeedFollowPara
 }
 
 const getFeedByUrl = `-- name: GetFeedByUrl :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at FROM feeds WHERE url = $1
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds WHERE url = $1
 `
 
 func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
@@ -142,6 +147,7 @@ func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
 		&i.Url,
 		&i.UserID,
 		&i.LastFetchedAt,
+		&i.Description,
 	)
 	return i, err
 }
@@ -196,17 +202,18 @@ func (q *Queries) GetFeedFollowsForUser(ctx context.Context, userID uuid.UUID) (
 }
 
 const getFeeds = `-- name: GetFeeds :many
-SELECT f.id, f.name, f.url, u.name as user_name 
+SELECT f.id, f.name, f.url, f.description, u.name as user_name 
 FROM feeds f
 JOIN users u ON f.user_id = u.id
 ORDER BY f.created_at DESC
 `
 
 type GetFeedsRow struct {
-	ID       uuid.UUID
-	Name     string
-	Url      string
-	UserName string
+	ID          uuid.UUID
+	Name        string
+	Url         string
+	Description sql.NullString
+	UserName    string
 }
 
 func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
@@ -222,6 +229,7 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 			&i.ID,
 			&i.Name,
 			&i.Url,
+			&i.Description,
 			&i.UserName,
 		); err != nil {
 			return nil, err
@@ -238,7 +246,7 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 }
 
 const getNextFeedToFetch = `-- name: GetNextFeedToFetch :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at FROM feeds
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds
 ORDER BY last_fetched_at ASC NULLS FIRST
 LIMIT 1
 `
@@ -254,6 +262,7 @@ func (q *Queries) GetNextFeedToFetch(ctx context.Context) (Feed, error) {
 		&i.Url,
 		&i.UserID,
 		&i.LastFetchedAt,
+		&i.Description,
 	)
 	return i, err
 }
