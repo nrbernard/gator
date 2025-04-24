@@ -1,44 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Gator is a simple RSS feed reader" />
-    <title>Posts - Gator</title>
-    <script src="https://unpkg.com/htmx.org/dist/htmx.js"></script>
-  </head>
-  <body>
-    <main>
-        <h1><a href="/">Gator</a></h1>
-        
-        <h2>Posts</h2>
-        
-        <div id="posts">
-            {{ range .Posts }}
-            <div class="post">
-                <a href="{{ .Link }}" target="_blank">{{ .Title }}</a>
-                <p>{{ .Description }}</p>
-            </div>
-            {{ end }}
-        </div>
-    </main>
+{{ block "posts-refresh" . }}
+<div id="posts-refresh">
+    <button hx-post="/posts/refresh" hx-swap="outerHTML" hx-target="#posts-refresh">Refresh Posts</button>
 
-    <script type="text/javascript">
-      document.addEventListener("DOMContentLoaded", (event) => {
-        document.body.addEventListener("htmx:beforeSwap", function (evt) {
-          if (evt.detail.xhr.status === 422) {
-            console.log("setting status to paint");
-            // allow 422 responses to swap as we are using this as a signal that
-            // a form was submitted with bad data and want to rerender with the
-            // errors
-            //
-            // set isError to false to avoid error logging in console
-            evt.detail.shouldSwap = true;
-            evt.detail.isError = false;
-          }
-        });
-      });
-    </script>
-  </body>
-</html>
+    {{ if .LastRefresh }}
+      <span>Last refreshed: {{ .LastRefresh }}</span>
+    {{ end }}
+  </div>
+{{ end }}
 
+{{ block "post" . }}
+<div class="post">
+    <a href="{{ .Link }}" target="_blank">{{ .Title }}</a>
+    <p>{{ .Description }}</p>
+</div>
+{{ end }}
+
+{{ block "posts-list" . }}
+<div id="posts">
+    {{ range .Posts }}
+      {{ template "post" . }}
+    {{ end }}
+</div>
+{{ end }}
+
+{{ block "oob-posts" . }}
+<div hx-swap-oob="beforeSwap" id="posts">
+  {{ range .Posts }}
+    {{ template "post" . }}
+  {{ end }}
+</div>
+{{ end }}

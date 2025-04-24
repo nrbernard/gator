@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
@@ -82,6 +84,54 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
 	if err := s.Repo.DeleteFeed(ctx, id); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func parseDate(date string) time.Time {
+	// Mon, 01 Jan 0001 00:00:00 +0000
+	fmt.Printf("parsing date: %s\n", date)
+
+	parsed, err := time.Parse(time.RFC1123Z, date)
+	if err != nil {
+		fmt.Printf("failed to parse date: %s\n", err)
+		return time.Time{}
+	}
+
+	return parsed
+}
+
+func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
+	feed, err := s.Repo.GetNextFeedToFetch(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get feeds: %s", err)
+	}
+
+	if err := s.Repo.MarkFeedAsFetched(context.Background(), feed.ID); err != nil {
+		return fmt.Errorf("failed to mark feed as fetched: %s", err)
+	}
+
+	feedData, err := rss.FetchFeed(context.Background(), feed.Url)
+	if err != nil {
+		return fmt.Errorf("failed to fetch feed: %s", err)
+	}
+
+	for _, item := range feedData.Channel.Item {
+		if _, err := s.Repo.CreatePost(ctx, database.CreatePostParams{
+			ID:          uuid.New(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: true},
+			PublishedAt: parseDate(item.PubDate),
+			FeedID:      feed.ID,
+		}); err != nil {
+			if !strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+				return fmt.Errorf("post with URL %s already exists", item.Link)
+			}
+		}
+
+		fmt.Printf("created post with URL %s\n", item.Link)
 	}
 
 	return nil

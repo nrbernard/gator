@@ -60,10 +60,21 @@ func main() {
 	postService := &service.PostService{Repo: dbQueries}
 	feedService := &service.FeedService{Repo: dbQueries}
 
-	postHandler := &handler.PostHandler{PostService: postService, UserService: userService}
-	feedHandler := &handler.FeedHandler{FeedService: feedService, UserService: userService}
+	postHandler, err := handler.NewPostHandler(postService, userService, feedService)
+	if err != nil {
+		fmt.Printf("Failed to create post handler: %s\n", err)
+		os.Exit(1)
+	}
+
+	feedHandler, err := handler.NewFeedHandler(feedService, userService)
+	if err != nil {
+		fmt.Printf("Failed to create feed handler: %s\n", err)
+		os.Exit(1)
+	}
 
 	e.GET("/", postHandler.Index)
+	e.POST("/posts/refresh", postHandler.Refresh)
+
 	e.GET("/feeds", feedHandler.Index)
 	e.POST("/feeds", feedHandler.Create)
 	e.DELETE("/feeds/:id", feedHandler.Delete)

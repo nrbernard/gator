@@ -16,6 +16,13 @@ type FeedHandler struct {
 	UserService *service.UserService
 }
 
+func NewFeedHandler(feedService *service.FeedService, userService *service.UserService) (*FeedHandler, error) {
+	if feedService == nil || userService == nil {
+		return nil, fmt.Errorf("all services must be provided")
+	}
+	return &FeedHandler{FeedService: feedService, UserService: userService}, nil
+}
+
 type FormData struct {
 	Errors map[string]string
 	Values map[string]string
@@ -41,7 +48,7 @@ func (h *FeedHandler) Index(c echo.Context) error {
 
 	user, err := h.UserService.GetUser(context.Background(), userName)
 	if err != nil {
-		return fmt.Errorf("failed to get user: %s", err)
+		return fmt.Errorf("failed to get user %s: %s", userName, err)
 	}
 
 	feeds, err := h.FeedService.ListFeeds(c.Request().Context(), user.ID)
