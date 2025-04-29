@@ -28,7 +28,7 @@ func NewPostHandler(postService *service.PostService, userService *service.UserS
 	}, nil
 }
 
-func (h *PostHandler) fetchPosts(c echo.Context) ([]models.Post, error) {
+func (h *PostHandler) fetchPosts(c echo.Context, query *string) ([]models.Post, error) {
 	userName, ok := c.Get("userName").(string)
 	if !ok {
 		return nil, fmt.Errorf("failed to get user name")
@@ -39,7 +39,7 @@ func (h *PostHandler) fetchPosts(c echo.Context) ([]models.Post, error) {
 		return nil, fmt.Errorf("failed to get user: %s", err)
 	}
 
-	posts, err := h.PostService.ListPosts(c.Request().Context(), user.ID)
+	posts, err := h.PostService.SearchPosts(c.Request().Context(), user.ID, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts: %s", err)
 	}
@@ -48,7 +48,7 @@ func (h *PostHandler) fetchPosts(c echo.Context) ([]models.Post, error) {
 }
 
 func (h *PostHandler) Index(c echo.Context) error {
-	posts, err := h.fetchPosts(c)
+	posts, err := h.fetchPosts(c, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
@@ -58,12 +58,26 @@ func (h *PostHandler) Index(c echo.Context) error {
 	})
 }
 
+func (h *PostHandler) Search(c echo.Context) error {
+	query := c.FormValue("search")
+
+	posts, err := h.fetchPosts(c, &query)
+	if err != nil {
+		return fmt.Errorf("failed to fetch posts: %s", err)
+	}
+
+	return c.Render(http.StatusOK, "posts-list", map[string]interface{}{
+		"Posts": posts,
+		"Query": query,
+	})
+}
+
 func (h *PostHandler) Refresh(c echo.Context) error {
 	if err := h.FeedService.ScrapeFeeds(c.Request().Context()); err != nil {
 		return fmt.Errorf("failed to scrape feeds: %s", err)
 	}
 
-	posts, err := h.fetchPosts(c)
+	posts, err := h.fetchPosts(c, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}

@@ -5,3 +5,9 @@ RETURNING *;
 
 -- name: GetPostsByUser :many
 SELECT * FROM posts WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE user_id = $1) ORDER BY published_at DESC LIMIT $2;
+
+-- name: SearchPosts :many
+SELECT * FROM posts 
+WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE user_id = $1) 
+AND (title ILIKE '%' || $2 || '%' OR description ILIKE '%' || $2 || '%') 
+ORDER BY published_at DESC LIMIT $3;

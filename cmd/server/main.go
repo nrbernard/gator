@@ -74,6 +74,7 @@ func main() {
 
 	e.GET("/", postHandler.Index)
 	e.POST("/posts/refresh", postHandler.Refresh)
+	e.POST("/search", postHandler.Search)
 
 	e.GET("/feeds", feedHandler.Index)
 	e.POST("/feeds", feedHandler.Create)

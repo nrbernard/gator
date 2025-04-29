@@ -1,10 +1,28 @@
 {{ block "posts-refresh" . }}
-<div id="posts-refresh">
+  <div id="posts-refresh">
     <button hx-post="/posts/refresh" hx-swap="outerHTML" hx-target="#posts-refresh">Refresh Posts</button>
 
     {{ if .LastRefresh }}
       <span>Last refreshed: {{ .LastRefresh }}</span>
     {{ end }}
+  </div>
+{{ end }}
+
+{{ block "posts-search" . }}
+  <div>
+    <input
+      type="search"
+      name="search"
+      placeholder="Begin typing to search posts..."
+      hx-post="/search"
+      hx-trigger="input changed delay:250ms, keyup[key=='Enter'], load"
+      hx-target="#posts"
+      hx-indicator=".htmx-indicator"
+    /> 
+
+    <span class="htmx-indicator">
+      Searching...
+     </span>
   </div>
 {{ end }}
 
@@ -17,8 +35,16 @@
 
 {{ block "posts-list" . }}
 <div id="posts">
-    {{ range .Posts }}
-      {{ template "post" . }}
+    {{ if .Posts }}
+        {{ range .Posts }}
+            {{ template "post" . }}
+        {{ end }}
+    {{ else }}
+        {{ if .Query }}
+            <p>No posts found for "{{ .Query }}".</p>
+        {{ else }}
+            <p>No posts found.</p>
+        {{ end }}
     {{ end }}
 </div>
 {{ end }}
