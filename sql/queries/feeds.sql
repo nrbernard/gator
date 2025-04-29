@@ -52,3 +52,8 @@ UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMES
 SELECT * FROM feeds
 ORDER BY last_fetched_at ASC NULLS FIRST
 LIMIT 1;
+
+-- name: GetFeedsToFetch :many
+SELECT * FROM feeds
+WHERE last_fetched_at IS NULL OR last_fetched_at < NOW() - ($1::text)::interval
+ORDER BY last_fetched_at ASC NULLS FIRST;

@@ -59,8 +59,7 @@ func (h *PostHandler) Index(c echo.Context) error {
 }
 
 func (h *PostHandler) Refresh(c echo.Context) error {
-	err := h.FeedService.ScrapeFeeds(c.Request().Context())
-	if err != nil {
+	if err := h.FeedService.ScrapeFeeds(c.Request().Context()); err != nil {
 		return fmt.Errorf("failed to scrape feeds: %s", err)
 	}
 

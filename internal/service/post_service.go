@@ -15,7 +15,7 @@ type PostService struct {
 func (s *PostService) ListPosts(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
 	dbPosts, err := s.Repo.GetPostsByUser(ctx, database.GetPostsByUserParams{
 		UserID: userID,
-		Limit:  10,
+		Limit:  100,
 	})
 	if err != nil {
 		return nil, err

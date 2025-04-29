@@ -245,6 +245,44 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 	return items, nil
 }
 
+const getFeedsToFetch = `-- name: GetFeedsToFetch :many
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds
+WHERE last_fetched_at IS NULL OR last_fetched_at < NOW() - ($1::text)::interval
+ORDER BY last_fetched_at ASC NULLS FIRST
+`
+
+func (q *Queries) GetFeedsToFetch(ctx context.Context, dollar_1 string) ([]Feed, error) {
+	rows, err := q.db.QueryContext(ctx, getFeedsToFetch, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Feed
+	for rows.Next() {
+		var i Feed
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+			&i.Url,
+			&i.UserID,
+			&i.LastFetchedAt,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getNextFeedToFetch = `-- name: GetNextFeedToFetch :one
 SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds
 ORDER BY last_fetched_at ASC NULLS FIRST

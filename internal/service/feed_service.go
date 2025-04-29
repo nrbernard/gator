@@ -90,48 +90,62 @@ func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
 }
 
 func parseDate(date string) time.Time {
-	// Mon, 01 Jan 0001 00:00:00 +0000
 	fmt.Printf("parsing date: %s\n", date)
 
+	// Try RFC1123Z first (with timezone offset)
 	parsed, err := time.Parse(time.RFC1123Z, date)
 	if err != nil {
-		fmt.Printf("failed to parse date: %s\n", err)
-		return time.Time{}
+		// If that fails, try RFC1123 (with GMT)
+		parsed, err = time.Parse(time.RFC1123, date)
+		if err != nil {
+			fmt.Printf("failed to parse date: %s\n", err)
+			return time.Time{}
+		}
 	}
 
 	return parsed
 }
 
 func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
-	feed, err := s.Repo.GetNextFeedToFetch(ctx)
+	feeds, err := s.Repo.GetFeedsToFetch(ctx, "24 hours")
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %s", err)
 	}
 
-	if err := s.Repo.MarkFeedAsFetched(context.Background(), feed.ID); err != nil {
-		return fmt.Errorf("failed to mark feed as fetched: %s", err)
+	if len(feeds) == 0 {
+		fmt.Println("no feeds to fetch")
+		return nil
 	}
 
-	feedData, err := rss.FetchFeed(context.Background(), feed.Url)
-	if err != nil {
-		return fmt.Errorf("failed to fetch feed: %s", err)
-	}
+	for _, feed := range feeds {
+		fmt.Printf("fetching feed: %s\n", feed.Name)
 
-	for _, item := range feedData.Channel.Item {
-		if _, err := s.Repo.CreatePost(ctx, database.CreatePostParams{
-			ID:          uuid.New(),
-			Title:       item.Title,
-			Url:         item.Link,
-			Description: sql.NullString{String: item.Description, Valid: true},
-			PublishedAt: parseDate(item.PubDate),
-			FeedID:      feed.ID,
-		}); err != nil {
-			if !strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-				return fmt.Errorf("post with URL %s already exists", item.Link)
-			}
+		feedData, err := rss.FetchFeed(context.Background(), feed.Url)
+		if err != nil {
+			return fmt.Errorf("failed to fetch feed: %s", err)
 		}
 
-		fmt.Printf("created post with URL %s\n", item.Link)
+		if err := s.Repo.MarkFeedAsFetched(context.Background(), feed.ID); err != nil {
+			return fmt.Errorf("failed to mark feed as fetched: %s", err)
+		}
+
+		for _, item := range feedData.Channel.Item {
+			post, err := s.Repo.CreatePost(ctx, database.CreatePostParams{
+				ID:          uuid.New(),
+				Title:       item.Title,
+				Url:         item.Link,
+				Description: sql.NullString{String: item.Description, Valid: true},
+				PublishedAt: parseDate(item.PubDate),
+				FeedID:      feed.ID,
+			})
+			if err != nil {
+				if !strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+					return fmt.Errorf("failed to create post: %s", err.Error())
+				}
+			} else {
+				fmt.Printf("created post with URL %s\n", post.Url)
+			}
+		}
 	}
 
 	return nil
