@@ -14,21 +14,18 @@ type PostService struct {
 }
 
 func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query *string) ([]models.Post, error) {
-	var dbPosts []database.Post
-	var err error
-
-	if query == nil {
-		dbPosts, err = s.Repo.GetPostsByUser(ctx, database.GetPostsByUserParams{
-			UserID: userID,
-			Limit:  100,
-		})
+	var queryStr sql.NullString
+	if query != nil {
+		queryStr = sql.NullString{String: *query, Valid: true}
 	} else {
-		dbPosts, err = s.Repo.SearchPosts(ctx, database.SearchPostsParams{
-			UserID:  userID,
-			Column2: sql.NullString{String: *query, Valid: true},
-			Limit:   100,
-		})
+		queryStr = sql.NullString{Valid: false}
 	}
+
+	dbPosts, err := s.Repo.SearchPostsByUser(ctx, database.SearchPostsByUserParams{
+		UserID:  userID,
+		Column2: queryStr.String,
+		Limit:   100,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +36,11 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query *
 			Title:       dbPost.Title,
 			Link:        dbPost.Url,
 			Description: dbPost.Description.String,
+			PublishedAt: dbPost.PublishedAt,
+			FeedID:      dbPost.FeedID,
+			FeedName:    dbPost.FeedName,
 		})
 	}
+
 	return posts, nil
 }

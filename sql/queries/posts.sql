@@ -6,8 +6,9 @@ RETURNING *;
 -- name: GetPostsByUser :many
 SELECT * FROM posts WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE user_id = $1) ORDER BY published_at DESC LIMIT $2;
 
--- name: SearchPosts :many
-SELECT * FROM posts 
-WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE user_id = $1) 
-AND (title ILIKE '%' || $2 || '%' OR description ILIKE '%' || $2 || '%') 
+-- name: SearchPostsByUser :many
+SELECT title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id FROM posts 
+JOIN feeds ON posts.feed_id = feeds.id
+WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = $1) 
+AND ($2::TEXT IS NULL OR $2::TEXT = '' OR (posts.title ILIKE '%' || $2::TEXT || '%' OR posts.description ILIKE '%' || $2::TEXT || '%'))
 ORDER BY published_at DESC LIMIT $3;

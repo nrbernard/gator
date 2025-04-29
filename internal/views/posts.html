@@ -1,35 +1,50 @@
 {{ block "posts-refresh" . }}
-  <div id="posts-refresh">
-    <button hx-post="/posts/refresh" hx-swap="outerHTML" hx-target="#posts-refresh">Refresh Posts</button>
+  <div id="posts-refresh" class="mb-6 flex items-center gap-4">
+    <button 
+      hx-post="/posts/refresh" 
+      hx-swap="outerHTML" 
+      hx-target="#posts-refresh"
+      class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+    >
+      Refresh Posts
+    </button>
 
     {{ if .LastRefresh }}
-      <span>Last refreshed: {{ .LastRefresh }}</span>
+      <span class="text-gray-400 text-sm">Last refreshed: {{ .LastRefresh }}</span>
     {{ end }}
   </div>
 {{ end }}
 
 {{ block "posts-search" . }}
-  <div>
+  <div class="mb-4">
     <input
       type="search"
       name="search"
       placeholder="Begin typing to search posts..."
       hx-post="/search"
-      hx-trigger="input changed delay:250ms, keyup[key=='Enter'], load"
+      hx-trigger="input changed delay:250ms, keyup[key=='Enter']"
       hx-target="#posts"
       hx-indicator=".htmx-indicator"
+      class="w-full px-4 py-2 bg-dark-lighter border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-400"
     /> 
 
-    <span class="htmx-indicator">
+    <span class="htmx-indicator text-gray-400 text-sm mt-2 block">
       Searching...
-     </span>
+    </span>
   </div>
 {{ end }}
 
 {{ block "post" . }}
-<div class="post">
-    <a href="{{ .Link }}" target="_blank">{{ .Title }}</a>
-    <p>{{ .Description }}</p>
+<div class="post py-6">
+    <div class="flex justify-between items-start mb-2">
+      <a href="/feeds/{{ .FeedID }}" class="text-sm text-gray-400 hover:text-gray-300 transition-colors block">{{ .FeedName }}</a>
+        <span class="text-sm text-gray-400 block">
+           {{ .PublishedAt.Format "January 2, 2006" }}
+        </span>
+    </div>
+
+    <a href="{{ .Link }}" target="_blank" class="text-xl font-semibold text-blue-400 hover:text-blue-300 hover:underline transition-all flex-1 mb-2 block">{{ .Title }}</a>
+    <p class="text-gray-300">{{ .Description }}</p>
 </div>
 {{ end }}
 
@@ -41,9 +56,9 @@
         {{ end }}
     {{ else }}
         {{ if .Query }}
-            <p>No posts found for "{{ .Query }}".</p>
+            <p class="text-gray-400 text-center py-8">No posts found for "{{ .Query }}".</p>
         {{ else }}
-            <p>No posts found.</p>
+            <p class="text-gray-400 text-center py-8">No posts found.</p>
         {{ end }}
     {{ end }}
 </div>

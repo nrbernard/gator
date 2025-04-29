@@ -96,36 +96,44 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 	return items, nil
 }
 
-const searchPosts = `-- name: SearchPosts :many
-SELECT id, created_at, updated_at, title, url, description, published_at, feed_id FROM posts 
-WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE user_id = $1) 
-AND (title ILIKE '%' || $2 || '%' OR description ILIKE '%' || $2 || '%') 
+const searchPostsByUser = `-- name: SearchPostsByUser :many
+SELECT title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id FROM posts 
+JOIN feeds ON posts.feed_id = feeds.id
+WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = $1) 
+AND ($2::TEXT IS NULL OR $2::TEXT = '' OR (posts.title ILIKE '%' || $2::TEXT || '%' OR posts.description ILIKE '%' || $2::TEXT || '%'))
 ORDER BY published_at DESC LIMIT $3
 `
 
-type SearchPostsParams struct {
+type SearchPostsByUserParams struct {
 	UserID  uuid.UUID
-	Column2 sql.NullString
+	Column2 string
 	Limit   int32
 }
 
-func (q *Queries) SearchPosts(ctx context.Context, arg SearchPostsParams) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, searchPosts, arg.UserID, arg.Column2, arg.Limit)
+type SearchPostsByUserRow struct {
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedName    string
+	FeedID      uuid.UUID
+}
+
+func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPostsByUser, arg.UserID, arg.Column2, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Post
+	var items []SearchPostsByUserRow
 	for rows.Next() {
-		var i Post
+		var i SearchPostsByUserRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.Title,
 			&i.Url,
 			&i.Description,
 			&i.PublishedAt,
+			&i.FeedName,
 			&i.FeedID,
 		); err != nil {
 			return nil, err
