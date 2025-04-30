@@ -1,45 +1,65 @@
 {{ block "feed-form" . }}
-<form id="feed-form" hx-post="/feeds" hx-swap="outerHTML">
-  <div>
-    <label for="url">
-      <span>URL</span>
-      <input id="url" type="text" name="url" placeholder="URL" 
-      {{ if .Values }}
-        {{ if .Values.url }}
-          value="{{ .Values.url }}"
-        {{ end }}
-      {{ end }} 
+<form id="feed-form" hx-post="/feeds" hx-swap="outerHTML" class="mb-6">
+  <div class="mb-4">
+    <label for="url" class="block mb-2">
+      <span class="text-gray-300">URL</span>
+      <input 
+        id="url" 
+        type="text" 
+        name="url" 
+        placeholder="URL" 
+        class="w-full px-4 py-2 bg-dark-lighter border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-400"
+        {{ if .Values }}
+          {{ if .Values.url }}
+            value="{{ .Values.url }}"
+          {{ end }}
+        {{ end }} 
       />
     </label>
 
     {{ if .Errors }}
       {{ if .Errors.url }}
-        <div class="error" style="color: red;">{{ .Errors.url }}</div>
+        <div class="error text-red-500 text-sm mt-1">{{ .Errors.url }}</div>
       {{ end }}
     {{ end }}
   </div>
 
   <div>
-    <button type="submit">Add</button>
+    <button 
+      type="submit" 
+      class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+    >
+      Add
+    </button>
   </div>
 </form>
 {{ end }}
 
 {{ block "feed" . }}
-<li class="feed" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-  <div>
-    <a href="{{ .Url }}" target="_blank">{{ .Name }}</a>
-    {{ if .Description }}
-      <p>{{ .Description }}</p>
-    {{ end }}
-  </div>
+<li class="feed py-4 border-b border-gray-700">
+  <div class="flex justify-between items-start">
+    <div>
+      <a href="{{ .Url }}" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline transition-all block">{{ .Name }}</a>
+      {{ if .Description }}
+        <p class="text-gray-300 mt-1">{{ .Description }}</p>
+      {{ end }}
+    </div>
 
-  <button hx-delete="/feeds/{{ .ID }}" hx-swap="outerHTML" hx-target="closest li.feed" hx-confirm="Are you sure you want to delete this feed?">Delete</button>
+    <button 
+      hx-delete="/feeds/{{ .ID }}" 
+      hx-swap="outerHTML" 
+      hx-target="closest li.feed" 
+      hx-confirm="Are you sure you want to delete this feed?"
+      class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm"
+    >
+      Delete
+    </button>
+  </div>
 </li>
 {{ end }}
 
 {{ block "feeds-list" . }}
-<ul id="feeds">
+<ul id="feeds" class="space-y-4">
     {{ range . }}
       {{ template "feed" . }}
     {{ end }}
@@ -47,7 +67,7 @@
 {{ end }}
 
 {{ block "oob-feed" . }}
-<ul hx-swap-oob="afterbegin" id="feeds">
+<ul hx-swap-oob="afterbegin" id="feeds" class="space-y-4">
   {{ template "feed" . }}
 </ul>
 {{ end }}

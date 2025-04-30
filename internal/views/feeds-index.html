@@ -1,21 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Gator is a simple RSS feed reader" />
     <title>Feeds - Gator</title>
     <script src="https://unpkg.com/htmx.org/dist/htmx.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                DEFAULT: '#1a1a1a',
+                lighter: '#2d2d2d',
+                darker: '#0f0f0f',
+              }
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body>
-    <main>
-        <h1><a href="/">Gator</a></h1>
-
-        <h2>Feeds</h2>
+  <body class="bg-dark text-gray-100 min-h-screen">
+    <main class="container mx-auto px-4 py-8 max-w-4xl">
+        <h1 class="text-3xl font-bold mb-8">
+          <a href="/" class="text-blue-400 hover:text-blue-300 transition-colors">Gator</a>
+        </h1>
+        
+        <h2 class="text-2xl font-semibold mb-6">Feeds</h2>
 
         {{ template "feed-form" .FormData }}
 
-        <hr />
+        <hr class="border-gray-700 my-6" />
 
         {{ template "feeds-list" .Feeds }}
     </main>
