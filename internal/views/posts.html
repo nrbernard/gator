@@ -1,5 +1,5 @@
 {{ block "posts-refresh" . }}
-  <div id="posts-refresh" class="mb-6 flex items-center gap-4">
+<div id="posts-refresh" class="mb-6 flex items-center gap-4">
     <button 
       hx-post="/posts/refresh" 
       hx-swap="outerHTML" 
@@ -34,13 +34,31 @@
   </div>
 {{ end }}
 
+{{ block "saved-post" . }}
+  <button hx-delete="/saved-posts/{{ .ID }}" hx-swap="outerHTML" class="text-blue-500 hover:text-blue-400">💙</button>
+{{ end }}
+
+{{ block "save-post" . }}
+  <button hx-post="/saved-posts/{{ .ID }}" hx-swap="outerHTML" class="text-blue-500 hover:text-blue-400">♡</button>
+{{ end }}
+
 {{ block "post" . }}
 <div class="post py-6">
     <div class="flex justify-between items-start mb-2">
       <a href="/feeds/{{ .FeedID }}" class="text-sm text-gray-400 hover:text-gray-300 transition-colors block">{{ .FeedName }}</a>
-        <span class="text-sm text-gray-400 block">
-           {{ .PublishedAt.Format "January 2, 2006" }}
-        </span>
+
+      <div class="flex items-center gap-2">
+
+      <span class="text-sm text-gray-400 block">
+          {{ .PublishedAt.Format "January 2, 2006" }}
+      </span>
+
+        {{ if .IsSaved }}
+          {{ template "saved-post" . }}
+        {{ else }}
+          {{ template "save-post" . }}
+        {{ end }}
+      </div>
     </div>
 
     <a href="{{ .Link }}" target="_blank" class="text-xl font-semibold text-blue-400 hover:text-blue-300 hover:underline transition-all flex-1 mb-2 block">{{ .Title }}</a>

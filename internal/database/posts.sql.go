@@ -97,8 +97,9 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 }
 
 const searchPostsByUser = `-- name: SearchPostsByUser :many
-SELECT title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id FROM posts 
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at FROM posts 
 JOIN feeds ON posts.feed_id = feeds.id
+LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = $1
 WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = $1) 
 AND ($2::TEXT IS NULL OR $2::TEXT = '' OR (posts.title ILIKE '%' || $2::TEXT || '%' OR posts.description ILIKE '%' || $2::TEXT || '%'))
 ORDER BY published_at DESC LIMIT $3
@@ -111,12 +112,14 @@ type SearchPostsByUserParams struct {
 }
 
 type SearchPostsByUserRow struct {
+	ID          uuid.UUID
 	Title       string
 	Url         string
 	Description sql.NullString
 	PublishedAt time.Time
 	FeedName    string
 	FeedID      uuid.UUID
+	SavedAt     sql.NullTime
 }
 
 func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
@@ -129,12 +132,14 @@ func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserPa
 	for rows.Next() {
 		var i SearchPostsByUserRow
 		if err := rows.Scan(
+			&i.ID,
 			&i.Title,
 			&i.Url,
 			&i.Description,
 			&i.PublishedAt,
 			&i.FeedName,
 			&i.FeedID,
+			&i.SavedAt,
 		); err != nil {
 			return nil, err
 		}

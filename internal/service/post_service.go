@@ -33,12 +33,14 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query *
 	posts := make([]models.Post, 0, len(dbPosts))
 	for _, dbPost := range dbPosts {
 		posts = append(posts, models.Post{
+			ID:          dbPost.ID,
 			Title:       dbPost.Title,
 			Link:        dbPost.Url,
 			Description: dbPost.Description.String,
 			PublishedAt: dbPost.PublishedAt,
 			FeedID:      dbPost.FeedID,
 			FeedName:    dbPost.FeedName,
+			IsSaved:     dbPost.SavedAt.Valid,
 		})
 	}
 
