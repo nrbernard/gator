@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/nrbernard/gator/internal/models"
 	"github.com/nrbernard/gator/internal/service"
@@ -29,17 +29,12 @@ func NewPostHandler(postService *service.PostService, userService *service.UserS
 }
 
 func (h *PostHandler) fetchPosts(c echo.Context, query *string) ([]models.Post, error) {
-	userName, ok := c.Get("userName").(string)
+	userID, ok := c.Get("userID").(uuid.UUID)
 	if !ok {
-		return nil, fmt.Errorf("failed to get user name")
+		return nil, fmt.Errorf("failed to get user from context")
 	}
 
-	user, err := h.UserService.GetUser(context.Background(), userName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %s", err)
-	}
-
-	posts, err := h.PostService.SearchPosts(c.Request().Context(), user.ID, query)
+	posts, err := h.PostService.SearchPosts(c.Request().Context(), userID, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts: %s", err)
 	}

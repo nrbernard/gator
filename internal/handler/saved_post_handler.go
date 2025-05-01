@@ -27,14 +27,9 @@ func NewSavedPostHandler(savedPostService *service.SavedPostService, userService
 }
 
 func (h *SavedPostHandler) Save(c echo.Context) error {
-	userName, ok := c.Get("userName").(string)
+	userID, ok := c.Get("userID").(uuid.UUID)
 	if !ok {
-		return fmt.Errorf("failed to get user name")
-	}
-
-	user, err := h.UserService.GetUser(context.Background(), userName)
-	if err != nil {
-		return fmt.Errorf("failed to get user %s: %s", userName, err)
+		return fmt.Errorf("failed to get user from context")
 	}
 
 	postID, err := uuid.Parse(c.Param("id"))
@@ -42,7 +37,7 @@ func (h *SavedPostHandler) Save(c echo.Context) error {
 		return fmt.Errorf("failed to parse post ID: %s", err)
 	}
 
-	err = h.SavedPostService.SavePost(context.Background(), postID, user.ID)
+	err = h.SavedPostService.SavePost(context.Background(), postID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to save post: %s", err)
 	}
@@ -53,14 +48,9 @@ func (h *SavedPostHandler) Save(c echo.Context) error {
 }
 
 func (h *SavedPostHandler) Delete(c echo.Context) error {
-	userName, ok := c.Get("userName").(string)
+	userID, ok := c.Get("userID").(uuid.UUID)
 	if !ok {
-		return fmt.Errorf("failed to get user name")
-	}
-
-	user, err := h.UserService.GetUser(context.Background(), userName)
-	if err != nil {
-		return fmt.Errorf("failed to get user %s: %s", userName, err)
+		return fmt.Errorf("failed to get user from context")
 	}
 
 	postID, err := uuid.Parse(c.Param("id"))
@@ -68,7 +58,7 @@ func (h *SavedPostHandler) Delete(c echo.Context) error {
 		return fmt.Errorf("failed to parse post ID: %s", err)
 	}
 
-	err = h.SavedPostService.UnsavePost(context.Background(), postID, user.ID)
+	err = h.SavedPostService.UnsavePost(context.Background(), postID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete post save: %s", err)
 	}

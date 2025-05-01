@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -41,17 +40,12 @@ type PageData struct {
 }
 
 func (h *FeedHandler) Index(c echo.Context) error {
-	userName, ok := c.Get("userName").(string)
+	userID, ok := c.Get("userID").(uuid.UUID)
 	if !ok {
-		return fmt.Errorf("failed to get user name")
+		return fmt.Errorf("failed to get user from context")
 	}
 
-	user, err := h.UserService.GetUser(context.Background(), userName)
-	if err != nil {
-		return fmt.Errorf("failed to get user %s: %s", userName, err)
-	}
-
-	feeds, err := h.FeedService.ListFeeds(c.Request().Context(), user.ID)
+	feeds, err := h.FeedService.ListFeeds(c.Request().Context(), userID)
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %s", err)
 	}
@@ -63,21 +57,16 @@ func (h *FeedHandler) Index(c echo.Context) error {
 }
 
 func (h *FeedHandler) Create(c echo.Context) error {
-	userName, ok := c.Get("userName").(string)
+	userID, ok := c.Get("userID").(uuid.UUID)
 	if !ok {
-		return fmt.Errorf("failed to get user name")
-	}
-
-	user, err := h.UserService.GetUser(context.Background(), userName)
-	if err != nil {
-		return fmt.Errorf("failed to get user: %s", err)
+		return fmt.Errorf("failed to get user from context")
 	}
 
 	url := c.FormValue("url")
 
 	feed, err := h.FeedService.CreateFeed(c.Request().Context(), service.CreateFeedParams{
 		Url:    url,
-		UserID: user.ID,
+		UserID: userID,
 	})
 	if err != nil {
 		formData := FormData{

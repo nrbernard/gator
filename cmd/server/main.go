@@ -46,7 +46,6 @@ func main() {
 	e := echo.New()
 	e.Renderer = newTemplate()
 	e.Use(echoMiddleware.Logger())
-	e.Use(middleware.CurrentUser(configFile))
 
 	db, err := sql.Open("postgres", configFile.DBUrl)
 	if err != nil {
@@ -60,6 +59,8 @@ func main() {
 	postService := &service.PostService{Repo: dbQueries}
 	feedService := &service.FeedService{Repo: dbQueries}
 	savedPostService := &service.SavedPostService{Repo: dbQueries}
+
+	e.Use(middleware.CurrentUser(configFile, userService))
 
 	postHandler, err := handler.NewPostHandler(postService, userService, feedService)
 	if err != nil {
