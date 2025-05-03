@@ -11,31 +11,31 @@ import (
 	"github.com/google/uuid"
 )
 
-const savePost = `-- name: SavePost :exec
+const deleteSavedPost = `-- name: DeleteSavedPost :exec
+DELETE FROM post_saves WHERE post_id = $1 AND user_id = $2
+`
+
+type DeleteSavedPostParams struct {
+	PostID uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) DeleteSavedPost(ctx context.Context, arg DeleteSavedPostParams) error {
+	_, err := q.db.ExecContext(ctx, deleteSavedPost, arg.PostID, arg.UserID)
+	return err
+}
+
+const saveSavedPost = `-- name: SaveSavedPost :exec
 INSERT INTO post_saves (id, post_id, user_id) VALUES ($1, $2, $3)
 `
 
-type SavePostParams struct {
+type SaveSavedPostParams struct {
 	ID     uuid.UUID
 	PostID uuid.UUID
 	UserID uuid.UUID
 }
 
-func (q *Queries) SavePost(ctx context.Context, arg SavePostParams) error {
-	_, err := q.db.ExecContext(ctx, savePost, arg.ID, arg.PostID, arg.UserID)
-	return err
-}
-
-const unsavePost = `-- name: UnsavePost :exec
-DELETE FROM post_saves WHERE post_id = $1 AND user_id = $2
-`
-
-type UnsavePostParams struct {
-	PostID uuid.UUID
-	UserID uuid.UUID
-}
-
-func (q *Queries) UnsavePost(ctx context.Context, arg UnsavePostParams) error {
-	_, err := q.db.ExecContext(ctx, unsavePost, arg.PostID, arg.UserID)
+func (q *Queries) SaveSavedPost(ctx context.Context, arg SaveSavedPostParams) error {
+	_, err := q.db.ExecContext(ctx, saveSavedPost, arg.ID, arg.PostID, arg.UserID)
 	return err
 }

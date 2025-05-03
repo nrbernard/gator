@@ -12,7 +12,7 @@ type SavedPostService struct {
 }
 
 func (s *SavedPostService) SavePost(ctx context.Context, postID uuid.UUID, userID uuid.UUID) error {
-	err := s.Repo.SavePost(ctx, database.SavePostParams{
+	err := s.Repo.SaveSavedPost(ctx, database.SaveSavedPostParams{
 		ID:     uuid.New(),
 		PostID: postID,
 		UserID: userID,
@@ -25,7 +25,7 @@ func (s *SavedPostService) SavePost(ctx context.Context, postID uuid.UUID, userI
 }
 
 func (s *SavedPostService) UnsavePost(ctx context.Context, postID uuid.UUID, userID uuid.UUID) error {
-	err := s.Repo.UnsavePost(ctx, database.UnsavePostParams{
+	err := s.Repo.DeleteSavedPost(ctx, database.DeleteSavedPostParams{
 		PostID: postID,
 		UserID: userID,
 	})
