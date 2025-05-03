@@ -43,7 +43,7 @@
 {{ end }}
 
 {{ block "post" . }}
-<div class="post py-6">
+<div id="post-{{ .ID }}" class="post py-6">
     <div class="flex justify-between items-start mb-2">
       <a href="/feeds/{{ .FeedID }}" class="text-sm text-gray-400 hover:text-gray-300 transition-colors block">{{ .FeedName }}</a>
 
@@ -58,10 +58,12 @@
         {{ else }}
           {{ template "save-post" . }}
         {{ end }}
+
+        <button hx-post="/read-posts/{{ .ID }}" hx-swap="outerHTML" class="text-blue-500 hover:text-blue-400"></button>
       </div>
     </div>
 
-    <a href="{{ .Link }}" target="_blank" class="text-xl font-semibold text-blue-400 hover:text-blue-300 hover:underline transition-all flex-1 mb-2 block">{{ .Title }}</a>
+    <a hx-post="/read-posts/{{ .ID }}" hx-swap="outerHTML" hx-target="#post-{{ .ID }}" onClick="window.open('{{ .Link }}', '_blank')" class="cursor-pointer text-xl font-semibold text-blue-400 hover:text-blue-300 hover:underline transition-all flex-1 mb-2 block">{{ .Title }}</a>
     <p class="text-gray-300">{{ .Description }}</p>
 </div>
 {{ end }}

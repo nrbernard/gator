@@ -59,6 +59,7 @@ func main() {
 	postService := &service.PostService{Repo: dbQueries}
 	feedService := &service.FeedService{Repo: dbQueries}
 	savedPostService := &service.SavedPostService{Repo: dbQueries}
+	readPostService := &service.ReadPostService{Repo: dbQueries}
 
 	e.Use(middleware.CurrentUser(configFile, userService))
 
@@ -80,10 +81,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	readPostHandler, err := handler.NewReadPostHandler(readPostService)
+	if err != nil {
+		fmt.Printf("Failed to create feed handler: %s\n", err)
+		os.Exit(1)
+	}
+
 	e.GET("/", postHandler.Index)
 
 	e.POST("/saved-posts/:id", savedPostHandler.Save)
 	e.DELETE("/saved-posts/:id", savedPostHandler.Delete)
+
+	e.POST("/read-posts/:id", readPostHandler.Save)
 
 	e.POST("/posts/refresh", postHandler.Refresh)
 
