@@ -13,5 +13,5 @@ LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = $
 LEFT JOIN post_reads ON posts.id = post_reads.post_id AND post_reads.user_id = $1
 WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = $1) 
 AND ($2::TEXT IS NULL OR $2::TEXT = '' OR (posts.title ILIKE '%' || $2::TEXT || '%' OR posts.description ILIKE '%' || $2::TEXT || '%'))
-AND post_reads.id IS NULL
-ORDER BY published_at DESC LIMIT $3;
+AND CASE WHEN $3::BOOLEAN THEN post_reads.id IS NOT NULL ELSE post_reads.id IS NULL END
+ORDER BY published_at DESC LIMIT $4;

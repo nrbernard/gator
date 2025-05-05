@@ -13,10 +13,15 @@ type PostService struct {
 	Repo *database.Queries
 }
 
-func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query *string) ([]models.Post, error) {
+type SearchOptions struct {
+	Query *string
+	Read  bool
+}
+
+func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options SearchOptions) ([]models.Post, error) {
 	var queryStr sql.NullString
-	if query != nil {
-		queryStr = sql.NullString{String: *query, Valid: true}
+	if options.Query != nil {
+		queryStr = sql.NullString{String: *options.Query, Valid: true}
 	} else {
 		queryStr = sql.NullString{Valid: false}
 	}
@@ -24,6 +29,7 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query *
 	dbPosts, err := s.Repo.SearchPostsByUser(ctx, database.SearchPostsByUserParams{
 		UserID:  userID,
 		Column2: queryStr.String,
+		Column3: options.Read,
 		Limit:   100,
 	})
 	if err != nil {

@@ -28,13 +28,13 @@ func NewPostHandler(postService *service.PostService, userService *service.UserS
 	}, nil
 }
 
-func (h *PostHandler) fetchPosts(c echo.Context, query *string) ([]models.Post, error) {
+func (h *PostHandler) fetchPosts(c echo.Context, options service.SearchOptions) ([]models.Post, error) {
 	userID, ok := c.Get("userID").(uuid.UUID)
 	if !ok {
 		return nil, fmt.Errorf("failed to get user from context")
 	}
 
-	posts, err := h.PostService.SearchPosts(c.Request().Context(), userID, query)
+	posts, err := h.PostService.SearchPosts(c.Request().Context(), userID, options)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get posts: %s", err)
 	}
@@ -43,7 +43,10 @@ func (h *PostHandler) fetchPosts(c echo.Context, query *string) ([]models.Post, 
 }
 
 func (h *PostHandler) Index(c echo.Context) error {
-	posts, err := h.fetchPosts(c, nil)
+	posts, err := h.fetchPosts(c, service.SearchOptions{
+		Query: nil,
+		Read:  false,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
@@ -56,7 +59,10 @@ func (h *PostHandler) Index(c echo.Context) error {
 func (h *PostHandler) Search(c echo.Context) error {
 	query := c.FormValue("search")
 
-	posts, err := h.fetchPosts(c, &query)
+	posts, err := h.fetchPosts(c, service.SearchOptions{
+		Query: &query,
+		Read:  false,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
@@ -72,7 +78,10 @@ func (h *PostHandler) Refresh(c echo.Context) error {
 		return fmt.Errorf("failed to scrape feeds: %s", err)
 	}
 
-	posts, err := h.fetchPosts(c, nil)
+	posts, err := h.fetchPosts(c, service.SearchOptions{
+		Query: nil,
+		Read:  false,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
