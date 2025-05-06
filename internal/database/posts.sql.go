@@ -103,15 +103,17 @@ LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = $
 LEFT JOIN post_reads ON posts.id = post_reads.post_id AND post_reads.user_id = $1
 WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = $1) 
 AND ($2::TEXT IS NULL OR $2::TEXT = '' OR (posts.title ILIKE '%' || $2::TEXT || '%' OR posts.description ILIKE '%' || $2::TEXT || '%'))
-AND CASE WHEN $3::BOOLEAN THEN post_reads.id IS NOT NULL ELSE post_reads.id IS NULL END
-ORDER BY published_at DESC LIMIT $4
+AND (NOT $3::BOOLEAN OR post_reads.id IS NULL)
+AND (NOT $4::BOOLEAN OR post_saves.id IS NOT NULL)
+ORDER BY published_at DESC LIMIT $5
 `
 
 type SearchPostsByUserParams struct {
-	UserID  uuid.UUID
-	Column2 string
-	Column3 bool
-	Limit   int32
+	UserID         uuid.UUID
+	SearchText     string
+	FilterByUnread bool
+	FilterBySaved  bool
+	LimitCount     int32
 }
 
 type SearchPostsByUserRow struct {
@@ -128,9 +130,10 @@ type SearchPostsByUserRow struct {
 func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPostsByUser,
 		arg.UserID,
-		arg.Column2,
-		arg.Column3,
-		arg.Limit,
+		arg.SearchText,
+		arg.FilterByUnread,
+		arg.FilterBySaved,
+		arg.LimitCount,
 	)
 	if err != nil {
 		return nil, err
