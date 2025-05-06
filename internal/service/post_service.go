@@ -14,8 +14,9 @@ type PostService struct {
 }
 
 type SearchOptions struct {
-	Query *string
-	Read  bool
+	Query  *string
+	Unread bool
+	Saved  bool
 }
 
 func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options SearchOptions) ([]models.Post, error) {
@@ -27,10 +28,11 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options
 	}
 
 	dbPosts, err := s.Repo.SearchPostsByUser(ctx, database.SearchPostsByUserParams{
-		UserID:  userID,
-		Column2: queryStr.String,
-		Column3: options.Read,
-		Limit:   100,
+		UserID:         userID,
+		SearchText:     queryStr.String,
+		FilterByUnread: options.Unread,
+		FilterBySaved:  options.Saved,
+		LimitCount:     100,
 	})
 	if err != nil {
 		return nil, err

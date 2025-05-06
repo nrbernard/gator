@@ -42,21 +42,19 @@ func (h *PostHandler) fetchPosts(c echo.Context, options service.SearchOptions) 
 	return posts, nil
 }
 
-func formatSearchOption(statusParam string) bool {
-	switch statusParam {
-	case "", "unread":
-		return false
+func formatSearchOptions(query *string, status string) service.SearchOptions {
+	return service.SearchOptions{
+		Query:  query,
+		Unread: status == "unread",
+		Saved:  status == "saved",
 	}
-	return true
 }
 
 func (h *PostHandler) Index(c echo.Context) error {
 	statusParam := c.QueryParam("status")
-	fmt.Printf("status: %s\n", statusParam)
-	posts, err := h.fetchPosts(c, service.SearchOptions{
-		Query: nil,
-		Read:  formatSearchOption(statusParam),
-	})
+	options := formatSearchOptions(nil, statusParam)
+
+	posts, err := h.fetchPosts(c, options)
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
@@ -81,8 +79,9 @@ func (h *PostHandler) Search(c echo.Context) error {
 	query := c.FormValue("search")
 
 	posts, err := h.fetchPosts(c, service.SearchOptions{
-		Query: &query,
-		Read:  false,
+		Query:  &query,
+		Unread: false,
+		Saved:  false,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
@@ -100,8 +99,9 @@ func (h *PostHandler) Refresh(c echo.Context) error {
 	}
 
 	posts, err := h.fetchPosts(c, service.SearchOptions{
-		Query: nil,
-		Read:  false,
+		Query:  nil,
+		Unread: false,
+		Saved:  false,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)

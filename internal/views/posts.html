@@ -103,12 +103,20 @@
     Unread
   </button>
   <button
-    hx-get="/posts?status=read"
+    hx-get="/posts?status=saved"
     hx-swap="outerHTML"
     hx-target="#tabs"
-    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "read" }}font-bold border-b-2 border-blue-500{{ end }}"
+    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "saved" }}font-bold border-b-2 border-blue-500{{ end }}"
   >
-    Read
+    Saved
+  </button>
+  <button
+    hx-get="/posts?status=all"
+    hx-swap="outerHTML"
+    hx-target="#tabs"
+    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "all" }}font-bold border-b-2 border-blue-500{{ end }}"
+  >
+    All
   </button>
 </div>
 {{ end }}
