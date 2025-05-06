@@ -7,7 +7,7 @@ RETURNING *;
 SELECT * FROM posts WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE user_id = $1) ORDER BY published_at DESC LIMIT $2;
 
 -- name: SearchPostsByUser :many
-SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at FROM posts 
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at, post_reads.created_at as read_at FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
 LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = @user_id
 LEFT JOIN post_reads ON posts.id = post_reads.post_id AND post_reads.user_id = @user_id

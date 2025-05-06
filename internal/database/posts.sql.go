@@ -97,7 +97,7 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 }
 
 const searchPostsByUser = `-- name: SearchPostsByUser :many
-SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at FROM posts 
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at, post_reads.created_at as read_at FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
 LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = $1
 LEFT JOIN post_reads ON posts.id = post_reads.post_id AND post_reads.user_id = $1
@@ -125,6 +125,7 @@ type SearchPostsByUserRow struct {
 	FeedName    string
 	FeedID      uuid.UUID
 	SavedAt     sql.NullTime
+	ReadAt      sql.NullTime
 }
 
 func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
@@ -151,6 +152,7 @@ func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserPa
 			&i.FeedName,
 			&i.FeedID,
 			&i.SavedAt,
+			&i.ReadAt,
 		); err != nil {
 			return nil, err
 		}

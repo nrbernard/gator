@@ -40,6 +40,11 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options
 
 	posts := make([]models.Post, 0, len(dbPosts))
 	for _, dbPost := range dbPosts {
+		isRead := dbPost.ReadAt.Valid
+		if options.Saved {
+			isRead = false
+		}
+
 		posts = append(posts, models.Post{
 			ID:          dbPost.ID,
 			Title:       dbPost.Title,
@@ -49,6 +54,7 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options
 			FeedID:      dbPost.FeedID,
 			FeedName:    dbPost.FeedName,
 			IsSaved:     dbPost.SavedAt.Valid,
+			IsRead:      isRead,
 		})
 	}
 

@@ -15,4 +15,5 @@ type Post struct {
 	FeedID      uuid.UUID
 	FeedName    string
 	IsSaved     bool
+	IsRead      bool
 }

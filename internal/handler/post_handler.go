@@ -43,10 +43,18 @@ func (h *PostHandler) fetchPosts(c echo.Context, options service.SearchOptions) 
 }
 
 func formatSearchOptions(query *string, status string) service.SearchOptions {
-	return service.SearchOptions{
-		Query:  query,
-		Unread: status == "unread",
-		Saved:  status == "saved",
+	if status == "" {
+		return service.SearchOptions{
+			Query:  nil,
+			Unread: true,
+			Saved:  false,
+		}
+	} else {
+		return service.SearchOptions{
+			Query:  query,
+			Unread: status == "unread",
+			Saved:  status == "saved",
+		}
 	}
 }
 

@@ -43,7 +43,7 @@
 {{ end }}
 
 {{ block "post" . }}
-<div id="post-{{ .ID }}" class="post py-6">
+<div id="post-{{ .ID }}" class="post py-6 {{ if .IsRead }}opacity-60{{ end }}">
     <div class="flex justify-between items-start mb-2">
       <a href="/feeds/{{ .FeedID }}" class="text-sm text-gray-400 hover:text-gray-300 transition-colors block">{{ .FeedName }}</a>
 
