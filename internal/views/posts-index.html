@@ -30,6 +30,8 @@
           <a href="/" class="text-blue-400 hover:text-blue-300 transition-colors">Gator</a>
         </h1>
         
+        {{ template "tabs" . }}
+
         <h2 class="text-2xl font-semibold mb-6">Posts</h2>
 
         {{ template "posts-refresh" . }}

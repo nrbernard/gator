@@ -91,3 +91,24 @@
   {{ end }}
 </div>
 {{ end }}
+
+{{ block "tabs" . }}
+<div id="tabs" class="mb-4 flex gap-4">
+  <button
+    hx-get="/posts?status=unread"
+    hx-swap="outerHTML"
+    hx-target="#tabs"
+    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "unread" }}font-bold border-b-2 border-blue-500{{ end }}"
+  >
+    Unread
+  </button>
+  <button
+    hx-get="/posts?status=read"
+    hx-swap="outerHTML"
+    hx-target="#tabs"
+    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "read" }}font-bold border-b-2 border-blue-500{{ end }}"
+  >
+    Read
+  </button>
+</div>
+{{ end }}

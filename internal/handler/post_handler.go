@@ -42,18 +42,39 @@ func (h *PostHandler) fetchPosts(c echo.Context, options service.SearchOptions) 
 	return posts, nil
 }
 
+func formatSearchOption(statusParam string) bool {
+	switch statusParam {
+	case "", "unread":
+		return false
+	}
+	return true
+}
+
 func (h *PostHandler) Index(c echo.Context) error {
+	statusParam := c.QueryParam("status")
+	fmt.Printf("status: %s\n", statusParam)
 	posts, err := h.fetchPosts(c, service.SearchOptions{
 		Query: nil,
-		Read:  false,
+		Read:  formatSearchOption(statusParam),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
 
-	return c.Render(http.StatusOK, "posts-index.html", map[string]interface{}{
-		"Posts": posts,
-	})
+	if statusParam == "" {
+		return c.Render(http.StatusOK, "posts-index.html", map[string]interface{}{
+			"Posts":    posts,
+			"Selected": "unread",
+		})
+	} else {
+		c.Render(http.StatusOK, "tabs", map[string]interface{}{
+			"Selected": statusParam,
+		})
+
+		return c.Render(http.StatusOK, "oob-posts", map[string]interface{}{
+			"Posts": posts,
+		})
+	}
 }
 
 func (h *PostHandler) Search(c echo.Context) error {

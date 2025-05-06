@@ -87,7 +87,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	e.GET("/", postHandler.Index)
+	e.GET("/", func(c echo.Context) error {
+		return c.Redirect(301, "/posts")
+	})
+
+	e.GET("/posts", postHandler.Index)
 
 	e.POST("/saved-posts/:id", savedPostHandler.Save)
 	e.DELETE("/saved-posts/:id", savedPostHandler.Delete)
