@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
+	"github.com/nrbernard/gator/internal/feedparser"
 	"github.com/nrbernard/gator/internal/models"
-	"github.com/nrbernard/gator/internal/rss"
 )
 
 type FeedService struct {
@@ -47,7 +47,7 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 		return models.Feed{}, fmt.Errorf("a feed with URL %s already exists", feedUrl)
 	}
 
-	feedData, err := rss.FetchFeed(context.Background(), feedUrl)
+	feedData, err := feedparser.FetchFeed(context.Background(), feedUrl)
 	if err != nil {
 		return models.Feed{}, fmt.Errorf("failed to fetch feed: %s", err)
 	}
@@ -120,7 +120,7 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 	for _, feed := range feeds {
 		fmt.Printf("fetching feed: %s\n", feed.Name)
 
-		feedData, err := rss.FetchFeed(context.Background(), feed.Url)
+		feedData, err := feedparser.FetchFeed(context.Background(), feed.Url)
 		if err != nil {
 			return fmt.Errorf("failed to fetch feed: %s", err)
 		}

@@ -24,3 +24,6 @@ reset:
 
 generate:
 	sqlc generate
+
+test:
+	go test -v ./...

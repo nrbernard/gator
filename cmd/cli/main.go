@@ -12,7 +12,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/nrbernard/gator/internal/config"
 	"github.com/nrbernard/gator/internal/database"
-	"github.com/nrbernard/gator/internal/rss"
+	"github.com/nrbernard/gator/internal/feedparser"
 )
 
 type state struct {
@@ -298,7 +298,7 @@ func scrapeFeeds(s *state) error {
 		return fmt.Errorf("failed to mark feed as fetched: %s", err)
 	}
 
-	feedData, err := rss.FetchFeed(context.Background(), feed.Url)
+	feedData, err := feedparser.FetchFeed(context.Background(), feed.Url)
 	if err != nil {
 		return fmt.Errorf("failed to fetch feed: %s", err)
 	}
