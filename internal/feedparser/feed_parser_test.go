@@ -14,7 +14,7 @@ func TestFetchFeed(t *testing.T) {
 		serverResponse string
 		statusCode     int
 		wantErr        bool
-		validateFeed   func(*testing.T, *RSSFeed)
+		validateFeed   func(*testing.T, Feed)
 	}{
 		{
 			name: "successful RSS feed fetch",
@@ -34,18 +34,18 @@ func TestFetchFeed(t *testing.T) {
 				</rss>`,
 			statusCode: http.StatusOK,
 			wantErr:    false,
-			validateFeed: func(t *testing.T, feed *RSSFeed) {
-				if feed.Channel.Title != "Test Feed" {
-					t.Errorf("expected title 'Test Feed', got '%s'", feed.Channel.Title)
+			validateFeed: func(t *testing.T, feed Feed) {
+				if feed.GetTitle() != "Test Feed" {
+					t.Errorf("expected title 'Test Feed', got '%s'", feed.GetTitle())
 				}
-				if feed.Channel.Link != "https://example.com" {
-					t.Errorf("expected link 'https://example.com', got '%s'", feed.Channel.Link)
+				if feed.GetLink() != "https://example.com" {
+					t.Errorf("expected link 'https://example.com', got '%s'", feed.GetLink())
 				}
-				if len(feed.Channel.Item) != 1 {
-					t.Errorf("expected 1 item, got %d", len(feed.Channel.Item))
+				if len(feed.GetItems()) != 1 {
+					t.Errorf("expected 1 item, got %d", len(feed.GetItems()))
 				}
-				if feed.Channel.Item[0].Title != "Test Item" {
-					t.Errorf("expected item title 'Test Item', got '%s'", feed.Channel.Item[0].Title)
+				if feed.GetItems()[0].GetTitle() != "Test Item" {
+					t.Errorf("expected item title 'Test Item', got '%s'", feed.GetItems()[0].GetTitle())
 				}
 			},
 		},
@@ -81,15 +81,15 @@ func TestFetchFeed(t *testing.T) {
 				</rss>`,
 			statusCode: http.StatusOK,
 			wantErr:    false,
-			validateFeed: func(t *testing.T, feed *RSSFeed) {
-				if feed.Channel.Title != "Test & Feed" {
-					t.Errorf("expected title 'Test & Feed', got '%s'", feed.Channel.Title)
+			validateFeed: func(t *testing.T, feed Feed) {
+				if feed.GetTitle() != "Test & Feed" {
+					t.Errorf("expected title 'Test & Feed', got '%s'", feed.GetTitle())
 				}
-				if feed.Channel.Description != "Test <Description>" {
-					t.Errorf("expected description 'Test <Description>', got '%s'", feed.Channel.Description)
+				if feed.GetDescription() != "Test <Description>" {
+					t.Errorf("expected description 'Test <Description>', got '%s'", feed.GetDescription())
 				}
-				if feed.Channel.Item[0].Title != "Test \"Item\"" {
-					t.Errorf("expected item title 'Test \"Item\"', got '%s'", feed.Channel.Item[0].Title)
+				if feed.GetItems()[0].GetTitle() != "Test \"Item\"" {
+					t.Errorf("expected item title 'Test \"Item\"', got '%s'", feed.GetItems()[0].GetTitle())
 				}
 			},
 		},

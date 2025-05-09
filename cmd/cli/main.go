@@ -303,13 +303,13 @@ func scrapeFeeds(s *state) error {
 		return fmt.Errorf("failed to fetch feed: %s", err)
 	}
 
-	for _, item := range feedData.Channel.Item {
+	for _, item := range feedData.GetItems() {
 		if _, err := s.db.CreatePost(context.Background(), database.CreatePostParams{
 			ID:          uuid.New(),
-			Title:       item.Title,
-			Url:         item.Link,
-			Description: sql.NullString{String: item.Description, Valid: true},
-			PublishedAt: parseDate(item.PubDate),
+			Title:       item.GetTitle(),
+			Url:         item.GetLink(),
+			Description: sql.NullString{String: item.GetDescription(), Valid: true},
+			PublishedAt: parseDate(item.GetDate()),
 			FeedID:      feed.ID,
 		}); err != nil {
 			fmt.Printf("failed to create post: %s\n", err)

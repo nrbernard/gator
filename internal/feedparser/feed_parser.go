@@ -9,6 +9,20 @@ import (
 	"net/http"
 )
 
+type Feed interface {
+	GetTitle() string
+	GetLink() string
+	GetDescription() string
+	GetItems() []Item
+}
+
+type Item interface {
+	GetTitle() string
+	GetLink() string
+	GetDescription() string
+	GetDate() string
+}
+
 type RSSFeed struct {
 	Channel struct {
 		Title       string    `xml:"title"`
@@ -22,10 +36,51 @@ type RSSItem struct {
 	Title       string `xml:"title"`
 	Link        string `xml:"link"`
 	Description string `xml:"description"`
-	PubDate     string `xml:"pubDate"`
+	Date        string `xml:"pubDate"`
 }
 
-func FetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+func (i *RSSItem) GetTitle() string {
+	return i.Title
+}
+
+func (i *RSSItem) GetLink() string {
+	return i.Link
+}
+
+func (i *RSSItem) GetDescription() string {
+	return i.Description
+}
+
+func (i *RSSItem) GetDate() string {
+	return i.Date
+}
+
+func (f *RSSFeed) GetTitle() string {
+	return f.Channel.Title
+}
+
+func (f *RSSFeed) GetLink() string {
+	return f.Channel.Link
+}
+
+func (f *RSSFeed) GetDescription() string {
+	return f.Channel.Description
+}
+
+func (f *RSSFeed) GetItems() []Item {
+	items := make([]Item, len(f.Channel.Item))
+	for i, item := range f.Channel.Item {
+		items[i] = &RSSItem{
+			Title:       item.Title,
+			Link:        item.Link,
+			Description: item.Description,
+			Date:        item.Date,
+		}
+	}
+	return items
+}
+
+func FetchFeed(ctx context.Context, feedURL string) (Feed, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
 	if err != nil {
 		return nil, err

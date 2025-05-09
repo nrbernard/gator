@@ -54,8 +54,8 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 
 	dbFeed, err := s.Repo.CreateFeed(ctx, database.CreateFeedParams{
 		ID:          uuid.New(),
-		Name:        feedData.Channel.Title,
-		Description: sql.NullString{String: feedData.Channel.Description, Valid: true},
+		Name:        feedData.GetTitle(),
+		Description: sql.NullString{String: feedData.GetDescription(), Valid: true},
 		Url:         feedUrl,
 		UserID:      params.UserID,
 	})
@@ -129,13 +129,13 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 			return fmt.Errorf("failed to mark feed as fetched: %s", err)
 		}
 
-		for _, item := range feedData.Channel.Item {
+		for _, item := range feedData.GetItems() {
 			post, err := s.Repo.CreatePost(ctx, database.CreatePostParams{
 				ID:          uuid.New(),
-				Title:       item.Title,
-				Url:         item.Link,
-				Description: sql.NullString{String: item.Description, Valid: true},
-				PublishedAt: parseDate(item.PubDate),
+				Title:       item.GetTitle(),
+				Url:         item.GetLink(),
+				Description: sql.NullString{String: item.GetDescription(), Valid: true},
+				PublishedAt: parseDate(item.GetDate()),
 				FeedID:      feed.ID,
 			})
 			if err != nil {
