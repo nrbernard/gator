@@ -27,3 +27,9 @@ generate:
 
 test:
 	go test -v ./...
+
+db-start:
+	brew services start postgresql@15
+
+db-stop:
+	brew services stop postgresql@15

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
@@ -89,23 +88,6 @@ func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func parseDate(date string) time.Time {
-	fmt.Printf("parsing date: %s\n", date)
-
-	// Try RFC1123Z first (with timezone offset)
-	parsed, err := time.Parse(time.RFC1123Z, date)
-	if err != nil {
-		// If that fails, try RFC1123 (with GMT)
-		parsed, err = time.Parse(time.RFC1123, date)
-		if err != nil {
-			fmt.Printf("failed to parse date: %s\n", err)
-			return time.Time{}
-		}
-	}
-
-	return parsed
-}
-
 func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 	feeds, err := s.Repo.GetFeedsToFetch(ctx, "24 hours")
 	if err != nil {
@@ -135,7 +117,7 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 				Title:       item.GetTitle(),
 				Url:         item.GetLink(),
 				Description: sql.NullString{String: item.GetDescription(), Valid: true},
-				PublishedAt: parseDate(item.GetDate()),
+				PublishedAt: item.GetDate(),
 				FeedID:      feed.ID,
 			})
 			if err != nil {

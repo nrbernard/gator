@@ -309,7 +309,7 @@ func scrapeFeeds(s *state) error {
 			Title:       item.GetTitle(),
 			Url:         item.GetLink(),
 			Description: sql.NullString{String: item.GetDescription(), Valid: true},
-			PublishedAt: parseDate(item.GetDate()),
+			PublishedAt: item.GetDate(),
 			FeedID:      feed.ID,
 		}); err != nil {
 			fmt.Printf("failed to create post: %s\n", err)
