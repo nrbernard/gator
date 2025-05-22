@@ -6,18 +6,19 @@
     <meta name="description" content="Gator is a simple RSS feed reader" />
     <title>Feeds - Gator</title>
     <script src="https://unpkg.com/htmx.org/dist/htmx.js"></script>
+    <link href="/static/css/output.css" rel="stylesheet">
   </head>
-  <body>
-    <main>
-        <h1>
-          <a href="/">Gator</a>
+  <body class="bg-neutral-100 min-h-screen">
+    <main class="max-w-4xl mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8">
+          <a href="/" class="text-gray-900 hover:text-blue-600 transition-colors">Gator</a>
         </h1>
         
-        <h2>Feeds</h2>
+        <h2 class="text-2xl font-semibold text-gray-900 mb-6">Feeds</h2>
 
         {{ template "feed-form" .FormData }}
 
-        <hr />
+        <hr class="my-6 border-neutral-200" />
 
         {{ template "feeds-list" .Feeds }}
     </main>
