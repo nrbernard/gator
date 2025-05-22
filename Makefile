@@ -4,13 +4,19 @@ build-cli:
 build-server:
 	go build -o bin/gator-server cmd/server/main.go
 
-build: build-cli build-server
+build-css:
+	./tailwindcss -i static/css/input.css -o static/css/output.css
+
+watch-css:
+	./tailwindcss -i static/css/input.css -o static/css/output.css --watch
+
+build: build-cli build-server build-css
 
 run-cli:
 	go run cmd/cli/main.go
 
 run-server:
-	air
+	$(MAKE) watch-css & air
 
 migrate-up:
 	goose -dir sql/schema postgres "postgres://nick.bernard:@localhost:5432/gator" up

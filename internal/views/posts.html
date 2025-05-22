@@ -1,22 +1,22 @@
 {{ block "posts-refresh" . }}
-<div id="posts-refresh" class="mb-6 flex items-center gap-4">
+<div id="posts-refresh" class="mb-4 flex items-center gap-4">
     <button 
       hx-post="/posts/refresh" 
       hx-swap="outerHTML" 
       hx-target="#posts-refresh"
-      class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+      class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
     >
       Refresh Posts
     </button>
 
     {{ if .LastRefresh }}
-      <span class="text-gray-400 text-sm">Last refreshed: {{ .LastRefresh }}</span>
+      <span class="text-gray-600 text-sm">Last refreshed: {{ .LastRefresh }}</span>
     {{ end }}
   </div>
 {{ end }}
 
 {{ block "posts-search" . }}
-  <div class="mb-4">
+  <div class="mb-6">
     <input
       type="search"
       name="search"
@@ -25,33 +25,30 @@
       hx-trigger="input changed delay:250ms, keyup[key=='Enter']"
       hx-target="#posts"
       hx-indicator=".htmx-indicator"
-      class="w-full px-4 py-2 bg-dark-lighter border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-100 placeholder-gray-400"
+      class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
     /> 
 
-    <span class="htmx-indicator text-gray-400 text-sm mt-2 block">
+    <span class="htmx-indicator text-gray-600 text-sm mt-2 block">
       Searching...
     </span>
   </div>
 {{ end }}
 
 {{ block "saved-post" . }}
-  <button hx-delete="/saved-posts/{{ .ID }}" hx-swap="outerHTML" class="text-blue-500 hover:text-blue-400">💙</button>
+  <button hx-delete="/saved-posts/{{ .ID }}" hx-swap="outerHTML" class="text-red-500 hover:text-red-600 transition-colors">💙</button>
 {{ end }}
 
 {{ block "save-post" . }}
-  <button hx-post="/saved-posts/{{ .ID }}" hx-swap="outerHTML" class="text-blue-500 hover:text-blue-400">♡</button>
+  <button hx-post="/saved-posts/{{ .ID }}" hx-swap="outerHTML" class="text-gray-400 hover:text-red-500 transition-colors">♡</button>
 {{ end }}
 
 {{ block "post" . }}
-<div id="post-{{ .ID }}" class="post py-6 {{ if .IsRead }}opacity-60{{ end }}">
-    <div class="flex justify-between items-start mb-2">
-      <a href="/feeds/{{ .FeedID }}" class="text-sm text-gray-400 hover:text-gray-300 transition-colors block">{{ .FeedName }}</a>
+<div id="post-{{ .ID }}" class="post all border-b border-neutral-200 mb-4 pb-4">
+    <div class="flex justify-between items-start mb-4">
+      <a href="/feeds/{{ .FeedID }}" class="text-sm text-blue-600 hover:text-blue-800">{{ .FeedName }}</a>
 
-      <div class="flex items-center gap-2">
-
-      <span class="text-sm text-gray-400 block">
-          {{ .PublishedAt.Format "January 2, 2006" }}
-      </span>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-gray-600">{{ .PublishedAt.Format "January 2, 2006" }}</span>
 
         {{ if .IsSaved }}
           {{ template "saved-post" . }}
@@ -59,33 +56,41 @@
           {{ template "save-post" . }}
         {{ end }}
 
-        <button hx-post="/read-posts/{{ .ID }}" hx-swap="outerHTML" class="text-blue-500 hover:text-blue-400"></button>
+        <button hx-post="/read-posts/{{ .ID }}" hx-swap="outerHTML" class="text-gray-400 hover:text-gray-600 transition-colors">✓</button>
       </div>
     </div>
 
-    <a hx-post="/read-posts/{{ .ID }}" hx-swap="outerHTML" hx-target="#post-{{ .ID }}" onClick="window.open('{{ .Link }}', '_blank')" class="cursor-pointer text-xl font-semibold text-blue-400 hover:text-blue-300 hover:underline transition-all flex-1 mb-2 block">{{ .Title }}</a>
-    <p class="text-gray-300">{{ .Description }}</p>
+    <a 
+      hx-post="/read-posts/{{ .ID }}" 
+      hx-swap="outerHTML" 
+      hx-target="#post-{{ .ID }}" 
+      onClick="window.open('{{ .Link }}', '_blank')"
+      class="text-xl font-semibold text-gray-900 cursor-pointer shadow-[0_2px_0_0] hover:shadow-0 shadow-lime-400/50 hover:inset-shadow-[0_-10px_0_0] hover:inset-shadow-lime-400/75 transition-all mb-2"
+    >
+      {{ .Title }}
+    </a>
+    <p class="text-gray-700 line-clamp-3">{{ .Description }}</p>
 </div>
 {{ end }}
 
 {{ block "posts-list" . }}
-<div id="posts">
+<div id="posts" class="space-y-4">
     {{ if .Posts }}
         {{ range .Posts }}
             {{ template "post" . }}
         {{ end }}
     {{ else }}
         {{ if .Query }}
-            <p class="text-gray-400 text-center py-8">No posts found for "{{ .Query }}".</p>
+            <p class="text-gray-600 text-center py-8">No posts found for "{{ .Query }}".</p>
         {{ else }}
-            <p class="text-gray-400 text-center py-8">No posts found.</p>
+            <p class="text-gray-600 text-center py-8">No posts found.</p>
         {{ end }}
     {{ end }}
 </div>
 {{ end }}
 
 {{ block "oob-posts" . }}
-<div hx-swap-oob="beforeSwap" id="posts">
+<div hx-swap-oob="beforeSwap" id="posts" class="space-y-4">
   {{ range .Posts }}
     {{ template "post" . }}
   {{ end }}
@@ -93,12 +98,12 @@
 {{ end }}
 
 {{ block "tabs" . }}
-<div id="tabs" class="mb-4 flex gap-4">
+<div id="tabs" class="flex gap-4 mb-6">
   <button
     hx-get="/posts?status=unread"
     hx-swap="outerHTML"
     hx-target="#tabs"
-    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "unread" }}font-bold border-b-2 border-blue-500{{ end }}"
+    class="px-4 py-2 rounded {{ if eq .Selected "unread" }}bg-blue-500 text-white{{ else }}bg-gray-100 text-gray-700 hover:bg-gray-200{{ end }} transition-colors"
   >
     Unread
   </button>
@@ -106,7 +111,7 @@
     hx-get="/posts?status=saved"
     hx-swap="outerHTML"
     hx-target="#tabs"
-    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "saved" }}font-bold border-b-2 border-blue-500{{ end }}"
+    class="px-4 py-2 rounded {{ if eq .Selected "saved" }}bg-blue-500 text-white{{ else }}bg-gray-100 text-gray-700 hover:bg-gray-200{{ end }} transition-colors"
   >
     Saved
   </button>
@@ -114,7 +119,7 @@
     hx-get="/posts?status=all"
     hx-swap="outerHTML"
     hx-target="#tabs"
-    class="text-blue-500 hover:text-blue-400 {{ if eq .Selected "all" }}font-bold border-b-2 border-blue-500{{ end }}"
+    class="px-4 py-2 rounded {{ if eq .Selected "all" }}bg-blue-500 text-white{{ else }}bg-gray-100 text-gray-700 hover:bg-gray-200{{ end }} transition-colors"
   >
     All
   </button>

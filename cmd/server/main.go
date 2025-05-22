@@ -46,6 +46,7 @@ func main() {
 	e := echo.New()
 	e.Renderer = newTemplate()
 	e.Use(echoMiddleware.Logger())
+	e.Static("/static", "static")
 
 	db, err := sql.Open("postgres", configFile.DBUrl)
 	if err != nil {
