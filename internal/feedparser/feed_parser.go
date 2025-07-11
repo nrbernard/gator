@@ -63,7 +63,7 @@ type atomItemXML struct {
 		Type string `xml:"type,attr"`
 		Data string `xml:",chardata"`
 	} `xml:"content"`
-	Date string `xml:"published"`
+	Date string `xml:"updated"`
 }
 
 type RSSFeed struct {
