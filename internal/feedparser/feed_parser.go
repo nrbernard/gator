@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+type FeedType string
+
+const (
+	FeedTypeAtom FeedType = "atom"
+	FeedTypeRSS  FeedType = "rss"
+)
+
 type Feed interface {
 	GetTitle() string
 	GetLink() string
@@ -213,6 +220,49 @@ func parseDate(date string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("failed to parse date: %s", date)
 }
 
+func detectFeedType(body []byte) (FeedType, error) {
+	decoder := xml.NewDecoder(strings.NewReader(string(body)))
+
+	token, err := decoder.Token()
+	if err != nil {
+		return "", fmt.Errorf("failed to read XML token: %w", err)
+	}
+
+	for {
+		switch t := token.(type) {
+		case xml.StartElement:
+			if t.Name.Space == "http://www.w3.org/2005/Atom" || t.Name.Local == "feed" {
+				return FeedTypeAtom, nil
+			}
+
+			if t.Name.Local == "rss" || t.Name.Local == "rdf" {
+				return FeedTypeRSS, nil
+			}
+
+			for _, attr := range t.Attr {
+				if attr.Name.Space == "xmlns" && strings.Contains(attr.Value, "atom") {
+					return FeedTypeAtom, nil
+				}
+				if attr.Name.Space == "xmlns" && strings.Contains(attr.Value, "rss") {
+					return FeedTypeRSS, nil
+				}
+			}
+
+			return FeedTypeRSS, nil
+		case xml.EndElement:
+			return FeedTypeRSS, nil
+		}
+
+		token, err = decoder.Token()
+		if err != nil {
+			if err == io.EOF {
+				return FeedTypeRSS, nil
+			}
+			return "", fmt.Errorf("failed to read XML token: %w", err)
+		}
+	}
+}
+
 func FetchFeed(ctx context.Context, feedURL string) (Feed, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
 	if err != nil {
@@ -236,7 +286,13 @@ func FetchFeed(ctx context.Context, feedURL string) (Feed, error) {
 		return nil, err
 	}
 
-	if strings.Contains(resp.Header.Get("Content-Type"), "atom") {
+	// Detect feed type by parsing XML namespace
+	feedType, err := detectFeedType(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect feed type: %w", err)
+	}
+
+	if feedType == FeedTypeAtom {
 		return parseAtomFeed(body)
 	} else {
 		return parseRSSFeed(body)

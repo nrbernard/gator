@@ -51,9 +51,20 @@ func compareItems(expected, actual Item) bool {
 	if expected.GetLink() != actual.GetLink() {
 		return false
 	}
-	if expected.GetDescription() != actual.GetDescription() {
+
+	// Compare description values, handling nil pointers
+	expectedDesc := expected.GetDescription()
+	actualDesc := actual.GetDescription()
+	if expectedDesc == nil && actualDesc == nil {
+		// Both are nil, so they're equal
+	} else if expectedDesc == nil || actualDesc == nil {
+		// One is nil, the other isn't
+		return false
+	} else if *expectedDesc != *actualDesc {
+		// Both are not nil, compare the actual string values
 		return false
 	}
+
 	if !expected.GetDate().Equal(actual.GetDate()) {
 		return false
 	}
@@ -141,7 +152,7 @@ func TestFetchFeed(t *testing.T) {
 						title:       "Don't make Google sell Chrome",
 						link:        "https://world.hey.com/dhh/don-t-make-google-sell-chrome-93cefbc6",
 						description: "The web will be far worse off if Google is forced to sell Chrome, even if it's to atone for legitimate ad-market monopoly abuses.",
-						date:        time.Date(2025, 4, 28, 6, 0, 37, 0, time.UTC),
+						date:        time.Date(2025, 4, 28, 6, 0, 48, 0, time.UTC), // Use <updated> date
 					},
 				},
 			},

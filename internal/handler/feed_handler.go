@@ -71,7 +71,7 @@ func (h *FeedHandler) Create(c echo.Context) error {
 	if err != nil {
 		formData := FormData{
 			Errors: map[string]string{
-				"url": "There is already a feed with this URL",
+				"url": err.Error(),
 			},
 			Values: map[string]string{
 				"url": url,
