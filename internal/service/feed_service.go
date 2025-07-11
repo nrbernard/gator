@@ -116,7 +116,7 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 				ID:          uuid.New(),
 				Title:       item.GetTitle(),
 				Url:         item.GetLink(),
-				Description: sql.NullString{String: item.GetDescription(), Valid: true},
+				Description: sql.NullString{String: *item.GetDescription(), Valid: item.GetDescription() != nil},
 				PublishedAt: item.GetDate(),
 				FeedID:      feed.ID,
 			})

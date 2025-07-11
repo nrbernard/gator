@@ -21,7 +21,7 @@ type Feed interface {
 type Item interface {
 	GetTitle() string
 	GetLink() string
-	GetDescription() string
+	GetDescription() *string
 	GetDate() time.Time
 }
 
@@ -122,8 +122,8 @@ func (i *RSSItem) GetLink() string {
 	return i.link
 }
 
-func (i *RSSItem) GetDescription() string {
-	return i.description
+func (i *RSSItem) GetDescription() *string {
+	return &i.description
 }
 
 func (i *RSSItem) GetDate() time.Time {
@@ -158,8 +158,8 @@ func (i *AtomItem) GetLink() string {
 	return i.link
 }
 
-func (i *AtomItem) GetDescription() string {
-	return i.description
+func (i *AtomItem) GetDescription() *string {
+	return &i.description
 }
 
 func (i *AtomItem) GetDate() time.Time {
