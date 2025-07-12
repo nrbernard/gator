@@ -14,15 +14,13 @@ import (
 )
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (id, created_at, updated_at, title, url, description, published_at, feed_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO posts (id, title, url, description, published_at, feed_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at, updated_at, title, url, description, published_at, feed_id
 `
 
 type CreatePostParams struct {
 	ID          uuid.UUID
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
 	Title       string
 	Url         string
 	Description sql.NullString
@@ -33,8 +31,6 @@ type CreatePostParams struct {
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
 	row := q.db.QueryRowContext(ctx, createPost,
 		arg.ID,
-		arg.CreatedAt,
-		arg.UpdatedAt,
 		arg.Title,
 		arg.Url,
 		arg.Description,
@@ -82,6 +78,77 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 			&i.Description,
 			&i.PublishedAt,
 			&i.FeedID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPostsByUser = `-- name: SearchPostsByUser :many
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at, post_reads.created_at as read_at FROM posts
+JOIN feeds ON posts.feed_id = feeds.id
+LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = $1
+LEFT JOIN post_reads ON posts.id = post_reads.post_id AND post_reads.user_id = $1
+WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = $1) 
+AND ($2::TEXT IS NULL OR $2::TEXT = '' OR (posts.title ILIKE '%' || $2::TEXT || '%' OR posts.description ILIKE '%' || $2::TEXT || '%'))
+AND (NOT $3::BOOLEAN OR post_reads.id IS NULL)
+AND (NOT $4::BOOLEAN OR post_saves.id IS NOT NULL)
+ORDER BY published_at DESC LIMIT $5
+`
+
+type SearchPostsByUserParams struct {
+	UserID         uuid.UUID
+	SearchText     string
+	FilterByUnread bool
+	FilterBySaved  bool
+	LimitCount     int32
+}
+
+type SearchPostsByUserRow struct {
+	ID          uuid.UUID
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedName    string
+	FeedID      uuid.UUID
+	SavedAt     sql.NullTime
+	ReadAt      sql.NullTime
+}
+
+func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPostsByUser,
+		arg.UserID,
+		arg.SearchText,
+		arg.FilterByUnread,
+		arg.FilterBySaved,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchPostsByUserRow
+	for rows.Next() {
+		var i SearchPostsByUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Url,
+			&i.Description,
+			&i.PublishedAt,
+			&i.FeedName,
+			&i.FeedID,
+			&i.SavedAt,
+			&i.ReadAt,
 		); err != nil {
 			return nil, err
 		}

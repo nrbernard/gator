@@ -1,19 +1,19 @@
 -- name: CreateFeed :one
-INSERT INTO feeds (id, created_at, updated_at, name, url, user_id)
+INSERT INTO feeds (id, name, url, description, user_id)
 VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5,
-    $6
+    $5
 )
 RETURNING *;
 
 -- name: GetFeeds :many
-SELECT f.name, f.url, u.name as user_name 
+SELECT f.id, f.name, f.url, f.description, u.name as user_name 
 FROM feeds f
-JOIN users u ON f.user_id = u.id;
+JOIN users u ON f.user_id = u.id
+ORDER BY f.created_at DESC;
 
 -- name: GetFeedByUrl :one
 SELECT * FROM feeds WHERE url = $1;
@@ -39,6 +39,9 @@ JOIN feeds f ON feed_follows.feed_id = f.id
 JOIN users u ON feed_follows.user_id = u.id
 WHERE feed_follows.user_id = $1;
 
+-- name: DeleteFeed :exec
+DELETE FROM feeds WHERE id = $1;
+
 -- name: DeleteFeedFollow :exec
 DELETE FROM feed_follows WHERE feed_follows.user_id = $1 AND feed_follows.feed_id = (SELECT id FROM feeds WHERE url = $2);
 
@@ -49,3 +52,8 @@ UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMES
 SELECT * FROM feeds
 ORDER BY last_fetched_at ASC NULLS FIRST
 LIMIT 1;
+
+-- name: GetFeedsToFetch :many
+SELECT * FROM feeds
+WHERE last_fetched_at IS NULL OR last_fetched_at < NOW() - ($1::text)::interval
+ORDER BY last_fetched_at ASC NULLS FIRST;

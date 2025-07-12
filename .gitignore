@@ -25,3 +25,8 @@ go.work.sum
 .env
 
 bin/
+
+tmp/
+
+tailwindcss
+static/css/output.css
