@@ -1,6 +1,3 @@
-build-cli:
-	go build -o bin/gator-cli cmd/cli/main.go
-
 build-server:
 	go build -o bin/gator-server cmd/server/main.go
 
@@ -10,10 +7,7 @@ build-css:
 watch-css:
 	./tailwindcss -i static/css/input.css -o static/css/output.css --watch
 
-build: build-cli build-server build-css
-
-run-cli:
-	go run cmd/cli/main.go
+build: build-server build-css
 
 run-server:
 	$(MAKE) watch-css & air
