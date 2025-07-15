@@ -13,9 +13,9 @@ type SavedPostService struct {
 
 func (s *SavedPostService) SavePost(ctx context.Context, postID uuid.UUID, userID uuid.UUID) error {
 	err := s.Repo.SaveSavedPost(ctx, database.SaveSavedPostParams{
-		ID:     uuid.New(),
-		PostID: postID,
-		UserID: userID,
+		ID:     uuid.New().String(),
+		PostID: postID.String(),
+		UserID: userID.String(),
 	})
 	if err != nil {
 		return err
@@ -26,8 +26,8 @@ func (s *SavedPostService) SavePost(ctx context.Context, postID uuid.UUID, userI
 
 func (s *SavedPostService) UnsavePost(ctx context.Context, postID uuid.UUID, userID uuid.UUID) error {
 	err := s.Repo.DeleteSavedPost(ctx, database.DeleteSavedPostParams{
-		PostID: postID,
-		UserID: userID,
+		PostID: postID.String(),
+		UserID: userID.String(),
 	})
 	if err != nil {
 		return err

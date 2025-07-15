@@ -7,21 +7,12 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
-	"github.com/nrbernard/gator/internal/config"
 	"github.com/nrbernard/gator/internal/database"
 )
 
 func main() {
-	// Read config
-	configFile, err := config.Read()
-	if err != nil {
-		fmt.Printf("Failed to read config: %s\n", err)
-		os.Exit(1)
-	}
-
 	// Connect to database
-	db, err := sql.Open("postgres", configFile.DBUrl)
+	db, err := sql.Open("sqlite3", "./data/gator.db")
 	if err != nil {
 		fmt.Printf("Failed to connect to database: %s\n", err)
 		os.Exit(1)
@@ -57,7 +48,7 @@ func main() {
 		for i := 1; i < len(posts); i++ {
 			post := posts[i]
 			err := dbQueries.SaveReadPost(context.Background(), database.SaveReadPostParams{
-				ID:     uuid.New(),
+				ID:     uuid.New().String(),
 				PostID: post.ID,
 				UserID: user.ID,
 			})

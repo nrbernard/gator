@@ -4,7 +4,6 @@ RSS feed aggregator and browser
 ## Prerequisites
 
 To run `gator`, you'll need:
-- PostgreSQL installed and running
 - Go 1.19 or later
 
 ## Installation
@@ -21,24 +20,11 @@ Before using `gator`, you need to set up your configuration file. Create a `.gat
 
 ```json
 {
-    "db_url": "postgres://username:password@localhost:5432/gator",
     "current_user_name": ""
 }
 ```
 
-Replace the `db_url` with your PostgreSQL connection string. The `current_user_name` will be set automatically when you register or login.
-
-## Database Setup
-
-1. Create a PostgreSQL database named `gator`:
-```bash
-createdb gator
-```
-
-2. Run the database migrations:
-```bash
-goose -dir sql/schema postgres "postgres://username:password@localhost:5432/gator" up
-```
+The `current_user_name` will be set automatically when you register or login.
 
 ## Usage
 

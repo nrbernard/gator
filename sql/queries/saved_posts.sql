@@ -1,5 +1,5 @@
 -- name: SaveSavedPost :exec
-INSERT INTO post_saves (id, post_id, user_id) VALUES ($1, $2, $3);
+INSERT INTO post_saves (id, post_id, user_id) VALUES (?, ?, ?);
 
 -- name: DeleteSavedPost :exec
-DELETE FROM post_saves WHERE post_id = $1 AND user_id = $2; 
+DELETE FROM post_saves WHERE post_id = ? AND user_id = ?; 

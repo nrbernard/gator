@@ -28,7 +28,7 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options
 	}
 
 	dbPosts, err := s.Repo.SearchPostsByUser(ctx, database.SearchPostsByUserParams{
-		UserID:         userID,
+		UserID:         userID.String(),
 		SearchText:     queryStr.String,
 		FilterByUnread: options.Unread,
 		FilterBySaved:  options.Saved,
@@ -46,12 +46,12 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, options
 		}
 
 		posts = append(posts, models.Post{
-			ID:          dbPost.ID,
+			ID:          uuid.MustParse(dbPost.ID),
 			Title:       dbPost.Title,
 			Link:        dbPost.Url,
 			Description: dbPost.Description.String,
 			PublishedAt: dbPost.PublishedAt,
-			FeedID:      dbPost.FeedID,
+			FeedID:      uuid.MustParse(dbPost.FeedID),
 			FeedName:    dbPost.FeedName,
 			IsSaved:     dbPost.SavedAt.Valid,
 			IsRead:      isRead,

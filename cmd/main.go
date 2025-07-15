@@ -9,7 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
-	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/nrbernard/gator/internal/config"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/handler"
@@ -48,7 +48,7 @@ func main() {
 	e.Use(echoMiddleware.Logger())
 	e.Static("/static", "static")
 
-	db, err := sql.Open("postgres", configFile.DBUrl)
+	db, err := sql.Open("sqlite3", "./data/gator.db")
 	if err != nil {
 		fmt.Printf("Failed to connect to database: %s\n", err)
 		os.Exit(1)
