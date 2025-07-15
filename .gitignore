@@ -28,5 +28,8 @@ bin/
 
 tmp/
 
+# Database files
+data/*.db
+
 tailwindcss
-static/css/output.css
+static/css/output.cssdata/*.db

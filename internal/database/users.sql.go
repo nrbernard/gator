@@ -8,23 +8,16 @@ package database
 import (
 	"context"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, created_at, updated_at, name)
-VALUES (
-    $1,
-    $2,
-    $3,
-    $4
-)
+VALUES (?1, ?2, ?3, ?4)
 RETURNING id, created_at, updated_at, name
 `
 
 type CreateUserParams struct {
-	ID        uuid.UUID
+	ID        string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Name      string
@@ -58,7 +51,7 @@ func (q *Queries) DeleteUsers(ctx context.Context) error {
 
 const getUser = `-- name: GetUser :one
 SELECT id, created_at, updated_at, name FROM users
-WHERE name = $1
+WHERE name = ?1
 `
 
 func (q *Queries) GetUser(ctx context.Context, name string) (User, error) {

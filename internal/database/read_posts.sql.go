@@ -7,17 +7,15 @@ package database
 
 import (
 	"context"
-
-	"github.com/google/uuid"
 )
 
 const deleteReadPost = `-- name: DeleteReadPost :exec
-DELETE FROM post_reads WHERE user_id = $1 AND post_id = $2
+DELETE FROM post_reads WHERE user_id = ?1 AND post_id = ?2
 `
 
 type DeleteReadPostParams struct {
-	UserID uuid.UUID
-	PostID uuid.UUID
+	UserID string
+	PostID string
 }
 
 func (q *Queries) DeleteReadPost(ctx context.Context, arg DeleteReadPostParams) error {
@@ -26,13 +24,13 @@ func (q *Queries) DeleteReadPost(ctx context.Context, arg DeleteReadPostParams) 
 }
 
 const saveReadPost = `-- name: SaveReadPost :exec
-INSERT INTO post_reads (id, post_id, user_id) VALUES ($1, $2, $3)
+INSERT INTO post_reads (id, post_id, user_id) VALUES (?1, ?2, ?3)
 `
 
 type SaveReadPostParams struct {
-	ID     uuid.UUID
-	PostID uuid.UUID
-	UserID uuid.UUID
+	ID     string
+	PostID string
+	UserID string
 }
 
 func (q *Queries) SaveReadPost(ctx context.Context, arg SaveReadPostParams) error {

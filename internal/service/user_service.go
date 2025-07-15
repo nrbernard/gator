@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/models"
 )
@@ -18,7 +19,7 @@ func (s *UserService) GetUser(ctx context.Context, userName string) (models.User
 	}
 
 	return models.User{
-		ID:   dbUser.ID,
+		ID:   uuid.MustParse(dbUser.ID),
 		Name: dbUser.Name,
 	}, nil
 }

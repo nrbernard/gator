@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
@@ -30,7 +31,7 @@ func (s *FeedService) ListFeeds(ctx context.Context, userID uuid.UUID) ([]models
 	var feeds []models.Feed
 	for _, dbFeed := range dbFeeds {
 		feeds = append(feeds, models.Feed{
-			ID:          dbFeed.ID,
+			ID:          uuid.MustParse(dbFeed.ID),
 			Name:        dbFeed.Name,
 			Description: &dbFeed.Description.String,
 			Url:         dbFeed.Url,
@@ -52,26 +53,26 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 	}
 
 	dbFeed, err := s.Repo.CreateFeed(ctx, database.CreateFeedParams{
-		ID:          uuid.New(),
+		ID:          uuid.New().String(),
 		Name:        feedData.GetTitle(),
 		Description: sql.NullString{String: feedData.GetDescription(), Valid: true},
 		Url:         feedUrl,
-		UserID:      params.UserID,
+		UserID:      params.UserID.String(),
 	})
 	if err != nil {
 		return models.Feed{}, err
 	}
 
 	if _, err := s.Repo.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
-		ID:     uuid.New(),
-		UserID: params.UserID,
+		ID:     uuid.New().String(),
+		UserID: params.UserID.String(),
 		FeedID: dbFeed.ID,
 	}); err != nil {
 		return models.Feed{}, err
 	}
 
 	feed := models.Feed{
-		ID:          dbFeed.ID,
+		ID:          uuid.MustParse(dbFeed.ID),
 		Name:        dbFeed.Name,
 		Description: &dbFeed.Description.String,
 		Url:         dbFeed.Url,
@@ -81,7 +82,7 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 }
 
 func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
-	if err := s.Repo.DeleteFeed(ctx, id); err != nil {
+	if err := s.Repo.DeleteFeed(ctx, id.String()); err != nil {
 		return err
 	}
 
@@ -89,7 +90,8 @@ func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
-	feeds, err := s.Repo.GetFeedsToFetch(ctx, "24 hours")
+	cutoff := time.Now().Add(-24 * time.Hour)
+	feeds, err := s.Repo.GetFeedsToFetch(ctx, sql.NullTime{Time: cutoff, Valid: true})
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %s", err)
 	}
@@ -113,7 +115,7 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 
 		for _, item := range feedData.GetItems() {
 			post, err := s.Repo.CreatePost(ctx, database.CreatePostParams{
-				ID:          uuid.New(),
+				ID:          uuid.New().String(),
 				Title:       item.GetTitle(),
 				Url:         item.GetLink(),
 				Description: sql.NullString{String: *item.GetDescription(), Valid: item.GetDescription() != nil},
@@ -122,7 +124,7 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 			})
 			if err != nil {
 				if !strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
-					return fmt.Errorf("failed to create post: %s", err.Error())
+					fmt.Printf("post already exists: %s\n", item.GetLink())
 				}
 			} else {
 				fmt.Printf("created post with URL %s\n", post.Url)
