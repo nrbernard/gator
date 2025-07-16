@@ -10,6 +10,8 @@ jobs:
     concurrency: deploy-group
     steps:
       - uses: actions/checkout@v4
+      - name: Run tests
+        run: make test
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --remote-only
         env:
