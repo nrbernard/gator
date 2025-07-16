@@ -1,0 +1,15 @@
+services:
+  gator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GO_VERSION: 1.24.2
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - DATABASE_PATH=/data/gator.db
+    command: sh -c "goose -dir /sql/schema sqlite3 /data/gator.db up && ./main"
+    restart: unless-stopped 

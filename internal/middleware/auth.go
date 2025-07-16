@@ -5,19 +5,13 @@ import (
 	"fmt"
 
 	"github.com/labstack/echo/v4"
-	"github.com/nrbernard/gator/internal/config"
 	"github.com/nrbernard/gator/internal/service"
 )
 
-func CurrentUser(config *config.Config, userService *service.UserService) echo.MiddlewareFunc {
+func CurrentUser(userService *service.UserService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			userName := config.GetUser()
-			if userName == "" {
-				return fmt.Errorf("failed to get user")
-			}
-
-			user, err := userService.GetUser(context.Background(), userName)
+			user, err := userService.GetUser(context.Background(), "nick")
 			if err != nil {
 				return fmt.Errorf("failed to get user from database: %w", err)
 			}

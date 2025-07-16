@@ -10,7 +10,6 @@ import (
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/nrbernard/gator/internal/config"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/handler"
 	"github.com/nrbernard/gator/internal/middleware"
@@ -37,18 +36,17 @@ type Page struct {
 }
 
 func main() {
-	configFile, err := config.Read()
-	if err != nil {
-		fmt.Printf("Failed to read config: %s\n", err)
-		os.Exit(1)
-	}
-
 	e := echo.New()
 	e.Renderer = newTemplate()
 	e.Use(echoMiddleware.Logger())
 	e.Static("/static", "static")
 
-	db, err := sql.Open("sqlite3", "./data/gator.db")
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "./data/gator.db" // Default for local development
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		fmt.Printf("Failed to connect to database: %s\n", err)
 		os.Exit(1)
@@ -62,7 +60,7 @@ func main() {
 	savedPostService := &service.SavedPostService{Repo: dbQueries}
 	readPostService := &service.ReadPostService{Repo: dbQueries}
 
-	e.Use(middleware.CurrentUser(configFile, userService))
+	e.Use(middleware.CurrentUser(userService))
 
 	postHandler, err := handler.NewPostHandler(postService, userService, feedService)
 	if err != nil {

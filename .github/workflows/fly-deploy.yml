@@ -1,0 +1,25 @@
+name: Deploy
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: make test
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Get machine ID
+        run: |
+          MACHINE_ID=$(flyctl machines list --json | jq -r '.[0].id')
+          echo "MACHINE_ID=$MACHINE_ID" >> $GITHUB_ENV
+      - name: Run migrations
+        run: |
+          flyctl console machine "$MACHINE_ID" --command "DATABASE_PATH=/data/gator.db make migrate-up"
