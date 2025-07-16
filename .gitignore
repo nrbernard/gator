@@ -32,4 +32,4 @@ tmp/
 data/*.db
 
 tailwindcss
-static/css/output.cssdata/*.db
+static/css/output.css
