@@ -22,4 +22,4 @@ jobs:
           echo "MACHINE_ID=$MACHINE_ID" >> $GITHUB_ENV
       - name: Run migrations
         run: |
-          flyctl console machine "$MACHINE_ID" --command "DATABASE_PATH=/data/gator.db make migrate-up"
+          flyctl console --machine "$MACHINE_ID" --command "DATABASE_PATH=/data/gator.db make migrate-up"
