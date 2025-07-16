@@ -19,7 +19,13 @@ jobs:
       - name: Get machine ID
         run: |
           MACHINE_ID=$(flyctl machines list --json | jq -r '.[0].id')
+          if [ "$MACHINE_ID" = "null" ] || [ -z "$MACHINE_ID" ]; then
+            echo "Machine not ready yet"
+            exit 1
+          fi
           echo "MACHINE_ID=$MACHINE_ID" >> $GITHUB_ENV
+        retries: 3
+        retry-on: failure
       - name: Run migrations
         run: |
           flyctl console --machine "$MACHINE_ID" --command "DATABASE_PATH=/data/gator.db make migrate-up"
