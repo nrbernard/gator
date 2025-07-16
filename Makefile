@@ -10,13 +10,23 @@ watch-css:
 build: build-server build-css
 
 run:
-	$(MAKE) watch-css & air
+	$(MAKE) build-css
+	$(MAKE) watch-css &
+	air
 
 migrate-up:
-	goose -dir sql/schema sqlite3 data/gator.db up
+	@if [ -z "$(DATABASE_PATH)" ]; then \
+		goose -dir sql/schema sqlite3 ./data/gator.db up; \
+	else \
+		goose -dir sql/schema sqlite3 $(DATABASE_PATH) up; \
+	fi
 
 migrate-down:
-	goose -dir sql/schema sqlite3 data/gator.db down
+	@if [ -z "$(DATABASE_PATH)" ]; then \
+		goose -dir sql/schema sqlite3 ./data/gator.db down; \
+	else \
+		goose -dir sql/schema sqlite3 $(DATABASE_PATH) down; \
+	fi
 
 reset:
 	$(MAKE) migrate-down

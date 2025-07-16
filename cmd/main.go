@@ -41,7 +41,12 @@ func main() {
 	e.Use(echoMiddleware.Logger())
 	e.Static("/static", "static")
 
-	db, err := sql.Open("sqlite3", "./data/gator.db")
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "./data/gator.db" // Default for local development
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		fmt.Printf("Failed to connect to database: %s\n", err)
 		os.Exit(1)

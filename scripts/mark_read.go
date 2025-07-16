@@ -11,8 +11,8 @@ import (
 )
 
 func main() {
-	// Connect to database
-	db, err := sql.Open("sqlite3", "./data/gator.db")
+	dbPath := os.Getenv("DATABASE_PATH")
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		fmt.Printf("Failed to connect to database: %s\n", err)
 		os.Exit(1)
