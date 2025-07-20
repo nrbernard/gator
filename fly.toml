@@ -12,6 +12,7 @@ primary_region = 'sea'
 
 [env]
   PORT = '8080'
+  DATABASE_PATH = '/data/gator.db'
 
 [mounts]
   source = "gator_data"

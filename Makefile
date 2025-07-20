@@ -15,18 +15,10 @@ run:
 	air
 
 migrate-up:
-	@if [ -z "$(DATABASE_PATH)" ]; then \
-		goose -dir sql/schema sqlite3 ./data/gator.db up; \
-	else \
-		goose -dir sql/schema sqlite3 $(DATABASE_PATH) up; \
-	fi
+	goose -dir sql/schema sqlite3 $(DATABASE_PATH) up
 
 migrate-down:
-	@if [ -z "$(DATABASE_PATH)" ]; then \
-		goose -dir sql/schema sqlite3 ./data/gator.db down; \
-	else \
-		goose -dir sql/schema sqlite3 $(DATABASE_PATH) down; \
-	fi
+	goose -dir sql/schema sqlite3 $(DATABASE_PATH) down
 
 reset:
 	$(MAKE) migrate-down

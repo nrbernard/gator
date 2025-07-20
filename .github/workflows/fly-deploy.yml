@@ -37,5 +37,7 @@ jobs:
             exit 1
           fi
       - name: Run migrations
+        env:
+          DATABASE_PATH: /data/gator.db
         run: |
-          flyctl console --machine "$MACHINE_ID" --command "DATABASE_PATH=/data/gator.db make migrate-up"
+          flyctl console --machine "$MACHINE_ID" --command "make migrate-up"

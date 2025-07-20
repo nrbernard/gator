@@ -11,5 +11,5 @@ services:
       - ./data:/data
     environment:
       - DATABASE_PATH=/data/gator.db
-    command: sh -c "goose -dir /sql/schema sqlite3 /data/gator.db up && ./main"
+    command: sh -c "make migrate-up && ./main"
     restart: unless-stopped 
