@@ -288,7 +288,7 @@ func FetchFeedWithConditionals(ctx context.Context, feedURL string, etag, lastMo
 		return nil, err
 	}
 
-	req.Header.Set("User-Agent", "hello-lane/1.0")
+	req.Header.Set("User-Agent", "Gator Feed Reader/1.1.0")
 
 	// Add conditional headers if provided
 	if etag != nil && *etag != "" {
