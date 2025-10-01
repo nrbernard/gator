@@ -263,7 +263,26 @@ func detectFeedType(body []byte) (FeedType, error) {
 	}
 }
 
+// FetchResult represents the result of a feed fetch operation
+type FetchResult struct {
+	Feed         Feed
+	StatusCode   int
+	ETag         string
+	LastModified string
+	NotModified  bool
+}
+
+// FetchFeed fetches a feed with optional conditional headers
 func FetchFeed(ctx context.Context, feedURL string) (Feed, error) {
+	result, err := FetchFeedWithConditionals(ctx, feedURL, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return result.Feed, nil
+}
+
+// FetchFeedWithConditionals fetches a feed with conditional request headers
+func FetchFeedWithConditionals(ctx context.Context, feedURL string, etag, lastModified *string) (*FetchResult, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
 	if err != nil {
 		return nil, err
@@ -271,12 +290,33 @@ func FetchFeed(ctx context.Context, feedURL string) (Feed, error) {
 
 	req.Header.Set("User-Agent", "hello-lane/1.0")
 
+	// Add conditional headers if provided
+	if etag != nil && *etag != "" {
+		req.Header.Set("If-None-Match", *etag)
+	}
+	if lastModified != nil && *lastModified != "" {
+		req.Header.Set("If-Modified-Since", *lastModified)
+	}
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	result := &FetchResult{
+		StatusCode:   resp.StatusCode,
+		ETag:         resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
+		NotModified:  resp.StatusCode == http.StatusNotModified,
+	}
+
+	// Handle 304 Not Modified response
+	if resp.StatusCode == http.StatusNotModified {
+		return result, nil
+	}
+
+	// Handle other non-200 status codes
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("status code: %d", resp.StatusCode)
 	}
@@ -293,10 +333,20 @@ func FetchFeed(ctx context.Context, feedURL string) (Feed, error) {
 	}
 
 	if feedType == FeedTypeAtom {
-		return parseAtomFeed(body)
+		feed, err := parseAtomFeed(body)
+		if err != nil {
+			return nil, err
+		}
+		result.Feed = feed
 	} else {
-		return parseRSSFeed(body)
+		feed, err := parseRSSFeed(body)
+		if err != nil {
+			return nil, err
+		}
+		result.Feed = feed
 	}
+
+	return result, nil
 }
 
 func parseAtomFeed(body []byte) (Feed, error) {

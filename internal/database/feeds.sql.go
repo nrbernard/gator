@@ -20,7 +20,7 @@ VALUES (
     ?,
     ? 
 )
-RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description
+RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified
 `
 
 type CreateFeedParams struct {
@@ -49,6 +49,8 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.UserID,
 		&i.LastFetchedAt,
 		&i.Description,
+		&i.Etag,
+		&i.LastModified,
 	)
 	return i, err
 }
@@ -110,7 +112,7 @@ func (q *Queries) DeleteFeedFollow(ctx context.Context, arg DeleteFeedFollowPara
 }
 
 const getFeedByUrl = `-- name: GetFeedByUrl :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds WHERE url = ?
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified FROM feeds WHERE url = ?
 `
 
 func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
@@ -125,6 +127,8 @@ func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
 		&i.UserID,
 		&i.LastFetchedAt,
 		&i.Description,
+		&i.Etag,
+		&i.LastModified,
 	)
 	return i, err
 }
@@ -223,7 +227,7 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 }
 
 const getFeedsToFetch = `-- name: GetFeedsToFetch :many
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified FROM feeds
 WHERE last_fetched_at IS NULL
    OR last_fetched_at < ?
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
@@ -247,6 +251,8 @@ func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTim
 			&i.UserID,
 			&i.LastFetchedAt,
 			&i.Description,
+			&i.Etag,
+			&i.LastModified,
 		); err != nil {
 			return nil, err
 		}
@@ -262,7 +268,7 @@ func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTim
 }
 
 const getNextFeedToFetch = `-- name: GetNextFeedToFetch :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description FROM feeds
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified FROM feeds
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
 LIMIT 1
 `
@@ -279,6 +285,8 @@ func (q *Queries) GetNextFeedToFetch(ctx context.Context) (Feed, error) {
 		&i.UserID,
 		&i.LastFetchedAt,
 		&i.Description,
+		&i.Etag,
+		&i.LastModified,
 	)
 	return i, err
 }
@@ -289,5 +297,39 @@ UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMES
 
 func (q *Queries) MarkFeedAsFetched(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, markFeedAsFetched, id)
+	return err
+}
+
+const updateFeedConditionalHeaders = `-- name: UpdateFeedConditionalHeaders :exec
+UPDATE feeds 
+SET etag = ?, last_modified = ?, last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+WHERE id = ?
+`
+
+type UpdateFeedConditionalHeadersParams struct {
+	Etag         sql.NullString
+	LastModified sql.NullString
+	ID           string
+}
+
+func (q *Queries) UpdateFeedConditionalHeaders(ctx context.Context, arg UpdateFeedConditionalHeadersParams) error {
+	_, err := q.db.ExecContext(ctx, updateFeedConditionalHeaders, arg.Etag, arg.LastModified, arg.ID)
+	return err
+}
+
+const updateFeedConditionalHeadersNoFetch = `-- name: UpdateFeedConditionalHeadersNoFetch :exec
+UPDATE feeds 
+SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP 
+WHERE id = ?
+`
+
+type UpdateFeedConditionalHeadersNoFetchParams struct {
+	Etag         sql.NullString
+	LastModified sql.NullString
+	ID           string
+}
+
+func (q *Queries) UpdateFeedConditionalHeadersNoFetch(ctx context.Context, arg UpdateFeedConditionalHeadersNoFetchParams) error {
+	_, err := q.db.ExecContext(ctx, updateFeedConditionalHeadersNoFetch, arg.Etag, arg.LastModified, arg.ID)
 	return err
 }

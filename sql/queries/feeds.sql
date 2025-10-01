@@ -49,3 +49,13 @@ SELECT * FROM feeds
 WHERE last_fetched_at IS NULL
    OR last_fetched_at < ?
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC;
+
+-- name: UpdateFeedConditionalHeaders :exec
+UPDATE feeds 
+SET etag = ?, last_modified = ?, last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+WHERE id = ?;
+
+-- name: UpdateFeedConditionalHeadersNoFetch :exec
+UPDATE feeds 
+SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP 
+WHERE id = ?;

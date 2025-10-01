@@ -18,6 +18,8 @@ type Feed struct {
 	UserID        string
 	LastFetchedAt sql.NullTime
 	Description   sql.NullString
+	Etag          sql.NullString
+	LastModified  sql.NullString
 }
 
 type FeedFollow struct {
