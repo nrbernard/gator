@@ -90,7 +90,8 @@ func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
-	cutoff := time.Now().Add(-24 * time.Hour)
+	// Change from 24 hours to 1 hour to respect the "once per hour" limit
+	cutoff := time.Now().Add(-1 * time.Hour)
 	feeds, err := s.Repo.GetFeedsToFetch(ctx, sql.NullTime{Time: cutoff, Valid: true})
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %s", err)
@@ -104,16 +105,56 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 	for _, feed := range feeds {
 		fmt.Printf("fetching feed: %s\n", feed.Name)
 
-		feedData, err := feedparser.FetchFeed(context.Background(), feed.Url)
+		// Extract conditional headers from database
+		var etag, lastModified *string
+		if feed.Etag.Valid && feed.Etag.String != "" {
+			etag = &feed.Etag.String
+		}
+		if feed.LastModified.Valid && feed.LastModified.String != "" {
+			lastModified = &feed.LastModified.String
+		}
+
+		// Use conditional request
+		result, err := feedparser.FetchFeedWithConditionals(context.Background(), feed.Url, etag, lastModified)
 		if err != nil {
+			// Handle rate limiting (429) with exponential backoff
+			if strings.Contains(err.Error(), "status code: 429") {
+				fmt.Printf("Rate limited for feed %s, skipping for now\n", feed.Name)
+				continue
+			}
 			return fmt.Errorf("failed to fetch feed: %s", err)
 		}
 
-		if err := s.Repo.MarkFeedAsFetched(context.Background(), feed.ID); err != nil {
-			return fmt.Errorf("failed to mark feed as fetched: %s", err)
+		// Handle 304 Not Modified response
+		if result.NotModified {
+			fmt.Printf("Feed %s not modified, updating headers only\n", feed.Name)
+			if err := s.Repo.UpdateFeedConditionalHeadersNoFetch(context.Background(), database.UpdateFeedConditionalHeadersNoFetchParams{
+				Etag:         sql.NullString{String: result.ETag, Valid: result.ETag != ""},
+				LastModified: sql.NullString{String: result.LastModified, Valid: result.LastModified != ""},
+				ID:           feed.ID,
+			}); err != nil {
+				return fmt.Errorf("failed to update feed headers: %s", err)
+			}
+			continue
 		}
 
-		for _, item := range feedData.GetItems() {
+		// Handle successful response with new content
+		if result.Feed == nil {
+			fmt.Printf("No feed data received for %s\n", feed.Name)
+			continue
+		}
+
+		// Update conditional headers and fetch timestamp
+		if err := s.Repo.UpdateFeedConditionalHeaders(context.Background(), database.UpdateFeedConditionalHeadersParams{
+			Etag:         sql.NullString{String: result.ETag, Valid: result.ETag != ""},
+			LastModified: sql.NullString{String: result.LastModified, Valid: result.LastModified != ""},
+			ID:           feed.ID,
+		}); err != nil {
+			return fmt.Errorf("failed to update feed headers: %s", err)
+		}
+
+		// Process new posts
+		for _, item := range result.Feed.GetItems() {
 			post, err := s.Repo.CreatePost(ctx, database.CreatePostParams{
 				ID:          uuid.New().String(),
 				Title:       item.GetTitle(),
