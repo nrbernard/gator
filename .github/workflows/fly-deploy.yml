@@ -20,22 +20,17 @@ jobs:
         run: flyctl deploy --remote-only
       - name: Get machine ID
         run: |
-          for i in {1..3}; do
-            MACHINE_ID=$(flyctl machines list --json | jq -r '.[0].id')
-            MACHINE_STATUS=$(flyctl machines list --json | jq -r '.[0].state')
-            if [ "$MACHINE_ID" != "null" ] && [ -n "$MACHINE_ID" ] && [ "$MACHINE_STATUS" = "started" ]; then
-              echo "MACHINE_ID=$MACHINE_ID" >> $GITHUB_ENV
-              break
-            fi
-            sleep 5 
-          done
-          
-          if [ -z "$MACHINE_ID" ] || [ "$MACHINE_ID" = "null" ] || [ "$MACHINE_STATUS" != "started" ]; then
-            echo "Failed to get started machine ID after 3 attempts"
-            echo "Machine ID: $MACHINE_ID"
-            echo "Machine Status: $MACHINE_STATUS"
+          MACHINE_ID=$(flyctl machines list --json | jq -r '.[0].id')
+          if [ "$MACHINE_ID" != "null" ] && [ -n "$MACHINE_ID" ]; then
+            echo "MACHINE_ID=$MACHINE_ID" >> $GITHUB_ENV
+          else
+            echo "Failed to get machine ID"
             exit 1
           fi
+      - name: Start machine
+        run: |
+          echo "Starting machine $MACHINE_ID..."
+          flyctl machines start "$MACHINE_ID"
       - name: Run migrations
         env:
           DATABASE_PATH: /data/gator.db
