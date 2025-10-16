@@ -19,20 +19,33 @@ jobs:
       - name: Deploy to Fly.io
         run: flyctl deploy --remote-only
       - name: Get machine ID
+        id: get_machine_id
         run: |
           MACHINE_ID=$(flyctl machines list --json | jq -r '.[0].id')
           if [ "$MACHINE_ID" != "null" ] && [ -n "$MACHINE_ID" ]; then
-            echo "MACHINE_ID=$MACHINE_ID" >> $GITHUB_ENV
+            echo "machine_id=$MACHINE_ID" >> $GITHUB_OUTPUT
           else
             echo "Failed to get machine ID"
             exit 1
           fi
+    outputs:
+      machine_id: ${{ steps.get_machine_id.outputs.machine_id }}
+  
+  migrate:
+    name: Run migrations
+    runs-on: ubuntu-latest
+    needs: deploy
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      MACHINE_ID: ${{ needs.deploy.outputs.machine_id }}
+      DATABASE_PATH: /data/gator.db
+    steps:
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Start machine
         run: |
           echo "Starting machine $MACHINE_ID..."
           flyctl machines start "$MACHINE_ID"
       - name: Run migrations
-        env:
-          DATABASE_PATH: /data/gator.db
         run: |
           flyctl console --machine "$MACHINE_ID" --command "make migrate-up"
