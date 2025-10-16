@@ -40,6 +40,7 @@ jobs:
       MACHINE_ID: ${{ needs.deploy.outputs.machine_id }}
       DATABASE_PATH: /data/gator.db
     steps:
+      - uses: actions/checkout@v4
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Start machine
