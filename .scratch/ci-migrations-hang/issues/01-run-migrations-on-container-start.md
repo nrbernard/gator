@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** needs-triage
+**Status:** done
 
-Needs the maintainer's go-ahead on the approach (see Decision below) before it's `ready-for-agent`.
+Shipped in `13f9ea6` (deploy run 41900650594). The `/posts` health check doesn't block auto-stop: the machine still stopped ~6.5 minutes after the deploy.
 
 - [x] The production container applies pending migrations before starting the server, and exits non-zero if they fail
 - [x] The CI "Run migrations" job, and the "Get machine ID" step that only fed it, are removed
@@ -14,7 +14,7 @@ Needs the maintainer's go-ahead on the approach (see Decision below) before it's
 - [x] `setup-flyctl` is pinned to an exact flyctl version instead of `latest`
 - [x] The full production image builds locally, and starting it against an empty database applies every migration before the server logs that it's listening
 - [x] CLAUDE.md's Deploys section and the README's Deploy paragraph describe the new ordering; the "migrations run after the new binary is live" caveat is gone
-- [ ] A deploy succeeds on every job, and the live posts page returns 200
+- [x] A deploy succeeds on every job, and the live posts page returns 200
 
 ## Diagnosis
 
