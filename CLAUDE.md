@@ -21,7 +21,7 @@ Prerequisites, first-run setup (including the hardcoded `nick` user every reques
 
 - The server parses `internal/views/*.html` relative to the working directory: run it from the repo root.
 - `static/css/output.css` is a build artifact (gitignored); the Docker build generates it.
-- The pre-commit hook in `.githooks/` runs gofmt, build, lint, and test. When the commit stages `sql/queries/`, `sql/schema/`, `sqlc.yaml`, or `internal/database/`, it first runs `go tool sqlc diff` and rejects the commit if the generated code is stale (fix: `make generate`). CI doesn't run that check.
+- The pre-commit hook in `.githooks/` runs gofmt, build, lint, and test. When the commit stages a change to `sql/queries/` or `sql/schema/` (deletions included), `sqlc.yaml`, `internal/database/`, or `go.mod` (it pins sqlc), it first regenerates into a temp dir with `go tool sqlc` and rejects the commit if `internal/database/` differs (fix: `make generate`, and delete generated files whose query file is gone). CI doesn't run that check.
 
 ## Agent skills
 

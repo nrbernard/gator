@@ -47,6 +47,10 @@ hooks:
 lint:
 	golangci-lint run ./...
 
+# Pinned, and built with go.mod's Go: it refuses to lint a module targeting a newer Go than it was built with.
+install-lint:
+	GOTOOLCHAIN="go$$(awk '$$1 == "go" { print $$2 }' go.mod)" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+
 # The checks the pre-commit hook and CI both run.
 check:
 	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \

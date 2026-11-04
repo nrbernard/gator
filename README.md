@@ -7,7 +7,7 @@ A single-user RSS reader: follow feeds, read, save, and mark posts read in the b
 - Go 1.27 with cgo (a C compiler; `go-sqlite3` needs it)
 - [goose](https://github.com/pressly/goose) for migrations, the `sqlite3` CLI for `make setup`, [air](https://github.com/air-verse/air) for live reload
 - The [standalone Tailwind CLI](https://github.com/tailwindlabs/tailwindcss/releases) (v4), saved as `./tailwindcss` in the repo root
-- [golangci-lint](https://golangci-lint.run) v2 for the pre-commit hook
+- [golangci-lint](https://golangci-lint.run) v2 for the pre-commit hook: `make install-lint` installs the pinned version
 
 ## First run
 

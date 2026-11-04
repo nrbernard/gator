@@ -7,9 +7,19 @@
 # so unstaged edits are included.
 set -eu
 
-# Only run when Go code, anything it builds from, or a file naming the Go version is staged.
-if ! git diff --cached --name-only --diff-filter=ACMR |
-	grep -qE '\.go$|^go\.(mod|sum)$|^sql/|^sqlc\.yaml$|^(fly\.toml|docker-compose\.yml|Dockerfile|README\.md|Makefile)$|^scripts/.*\.sh$'; then
+# staged_matches <filter> <regex>: some staged path, of a change type in
+# <filter> (git diff --diff-filter), matches the extended regex.
+staged_matches() {
+	git diff --cached --name-only --diff-filter="$1" | grep -qE "$2"
+}
+
+# SQL whose deletion changes the generated code.
+sql_input='^sql/(queries|schema)/'
+
+# Only run when Go code, anything it builds from, or a file naming the Go version is staged,
+# or when SQL is deleted.
+if ! staged_matches ACMR '\.go$|^go\.(mod|sum)$|^sql/|^sqlc\.yaml$|^(fly\.toml|docker-compose\.yml|Dockerfile|README\.md|Makefile)$|^scripts/.*\.sh$' &&
+	! staged_matches D "$sql_input"; then
 	exit 0
 fi
 
@@ -19,13 +29,21 @@ fail() {
 }
 
 command -v golangci-lint >/dev/null 2>&1 ||
-	fail "golangci-lint not found; install with (from the repo root): GOTOOLCHAIN=go\$(awk '\$1 == \"go\" { print \$2 }' go.mod) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
+	fail "golangci-lint not found; install with \`make install-lint\`"
 
 # Generated database code must match the SQL, checked with the sqlc pinned in go.mod.
-# Only when SQL, the sqlc config, or the generated code itself is staged.
-if git diff --cached --name-only --diff-filter=ACMR |
-	grep -qE '^sql/(queries|schema)/|^sqlc\.yaml$|^internal/database/'; then
-	go tool sqlc diff >&2 || fail "generated database code is out of date; run \`make generate\` and stage the result"
+# Only when SQL (including its deletion), the sqlc config, the generated code itself,
+# or go.mod (which pins sqlc) is staged.
+if staged_matches ACMR "$sql_input"'|^sqlc\.yaml$|^internal/database/|^go\.mod$' ||
+	staged_matches D "$sql_input"; then
+	# Generate into a scratch copy and compare the whole directory: `sqlc diff` misses
+	# generated files left behind by a deleted query file.
+	scratch=$(mktemp -d)
+	trap 'rm -rf "$scratch"' EXIT
+	cp -R sqlc.yaml sql "$scratch"/
+	go tool sqlc generate -f "$scratch/sqlc.yaml" >&2 || fail "sqlc generate failed"
+	diff -ru internal/database "$scratch/internal/database" >&2 ||
+		fail "generated database code is out of date; run \`make generate\` (and delete any file listed 'Only in internal/database'), then stage the result"
 fi
 
 # Same checks CI runs before deploying.
