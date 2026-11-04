@@ -3,56 +3,38 @@ package service
 import (
 	"context"
 	"database/sql"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/nrbernard/gator/internal/database"
+	"github.com/pressly/goose/v3"
+	goosedb "github.com/pressly/goose/v3/database"
 )
 
+// schemaDir holds the goose migrations, relative to this package.
+const schemaDir = "../../sql/schema"
+
 func setupTestDB(t *testing.T) *database.Queries {
+	t.Helper()
+
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
+	t.Cleanup(func() { db.Close() })
+	// Each connection to :memory: is a separate database; pin to one so
+	// migrations and queries see the same schema.
+	db.SetMaxOpenConns(1)
 
-	// Create tables
-	createTables := `
-	CREATE TABLE users (
-		id TEXT PRIMARY KEY,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		name VARCHAR(255) NOT NULL
-	);
-	
-	CREATE TABLE feeds (
-		id TEXT PRIMARY KEY,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		name VARCHAR(255) NOT NULL,
-		url VARCHAR(255) NOT NULL UNIQUE,
-		user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-		last_fetched_at TIMESTAMP,
-		description TEXT,
-		etag TEXT,
-		last_modified TEXT
-	);
-	
-	CREATE TABLE posts (
-		id TEXT PRIMARY KEY,
-		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		title VARCHAR(255) NOT NULL,
-		url VARCHAR(255) NOT NULL UNIQUE,
-		description TEXT,
-		published_at TIMESTAMP NOT NULL,
-		feed_id TEXT NOT NULL REFERENCES feeds(id) ON DELETE CASCADE
-	);
-	`
-
-	if _, err := db.Exec(createTables); err != nil {
-		t.Fatalf("Failed to create tables: %v", err)
+	provider, err := goose.NewProvider(goosedb.DialectSQLite3, db, os.DirFS(schemaDir))
+	if err != nil {
+		t.Fatalf("Failed to create migration provider: %v", err)
+	}
+	if _, err := provider.Up(context.Background()); err != nil {
+		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	return database.New(db)

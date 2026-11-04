@@ -13,7 +13,7 @@ Migrations run *after* the new binary is live, so for a short window new code se
 - Schema is goose migrations in `sql/schema/NNN_name.sql`, numbered sequentially. Queries are in `sql/queries/`.
 - `internal/database/` is sqlc output. Change the SQL in `sql/queries/` or `sql/schema/`, then run `make generate` and commit the regenerated files with it.
 - `make migrate-*` needs `DATABASE_PATH` set; locally that's `./data/gator.db`.
-- `internal/service/feed_service_test.go` builds its in-memory schema by hand in `setupTestDB`. When a migration touches `users`, `feeds`, or `posts`, update that schema too.
+- Service tests get an in-memory SQLite database with the real migrations applied: `setupTestDB` in `internal/service/feed_service_test.go`.
 
 ## Running locally
 
