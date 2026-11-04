@@ -26,7 +26,8 @@ primary_region = 'sea'
   min_machines_running = 0
   processes = ['app']
 
-  # Deploys wait for this, so a machine whose migrations failed fails the deploy.
+  # A deploy to a running machine waits for this, so failed migrations fail that deploy.
+  # A stopped machine stays stopped during a deploy, so this check doesn't run then.
   [[http_service.checks]]
     grace_period = '10s'
     interval = '30s'

@@ -6,7 +6,7 @@ RSS reader: Go + Echo, SQLite via sqlc, server-rendered `html/template` views st
 
 A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): `make check` (the same checks as the pre-commit hook), then `flyctl deploy`. Work on a branch; merging to `main` is a release.
 
-The container runs `goose up` on every start, before the server (Dockerfile `CMD`), so a failed migration fails the deploy's health check. A migration that succeeds stays applied even if the deploy then rolls back to the old code, so keep schema changes backward compatible: add a column in one release, start reading it in the next.
+The container runs `goose up` on every start, before the server (Dockerfile `CMD`); a failed migration keeps the server from starting. The machine scales to zero, and a deploy leaves a stopped machine stopped, so a new release usually first boots, and migrates, on the next request rather than during the deploy. CI catches broken migrations earlier: `go test` applies every one to a fresh database. A migration that succeeds stays applied even if the deploy then rolls back to the old code, so keep schema changes backward compatible: add a column in one release, start reading it in the next.
 
 ## Database
 

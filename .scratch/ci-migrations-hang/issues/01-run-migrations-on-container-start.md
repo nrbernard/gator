@@ -8,6 +8,8 @@
 
 Shipped in `13f9ea6` (deploy run 41900650594). The `/posts` health check doesn't block auto-stop: the machine still stopped ~6.5 minutes after the deploy.
 
+Correction: the health check only fails a deploy when the machine is running at deploy time. Deploy run 41907647326 (`bb1b374`) updated a stopped machine and left it stopped, so the new release first booted and migrated on the next request. Fly gives no hook that runs on the volume during a deploy (`release_command` machines have no volumes), and CI's `go test` applies every migration to a fresh database, so no post-deploy wake-up step was added.
+
 - [x] The production container applies pending migrations before starting the server, and exits non-zero if they fail
 - [x] The CI "Run migrations" job, and the "Get machine ID" step that only fed it, are removed
 - [x] Every remaining CI job has a `timeout-minutes`, so a hang fails in minutes instead of running for GitHub's 6-hour default
