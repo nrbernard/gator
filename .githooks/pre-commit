@@ -6,8 +6,9 @@
 # so unstaged edits are included.
 set -eu
 
-# Only run when Go code or anything it builds from is staged.
-if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '\.go$|^go\.(mod|sum)$|^sql/'; then
+# Only run when Go code, anything it builds from, or a file naming the Go version is staged.
+if ! git diff --cached --name-only --diff-filter=ACMR |
+	grep -qE '\.go$|^go\.(mod|sum)$|^sql/|^(fly\.toml|docker-compose\.yml|Dockerfile|README\.md|Makefile)$|^scripts/.*\.sh$'; then
 	exit 0
 fi
 

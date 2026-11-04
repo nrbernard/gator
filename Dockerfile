@@ -1,4 +1,4 @@
-ARG GO_VERSION=1
+ARG GO_VERSION=1.24.2
 
 FROM alpine:3.19 as tailwind
 WORKDIR /app
