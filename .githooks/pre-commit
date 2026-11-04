@@ -27,9 +27,8 @@ $unformatted"
 echo "pre-commit: build"
 go build ./... || fail "build failed"
 
-# Only issues introduced by this commit; existing code has known findings.
 echo "pre-commit: lint"
-golangci-lint run --new-from-rev=HEAD ./... || fail "lint failed"
+golangci-lint run ./... || fail "lint failed"
 
 echo "pre-commit: test"
 go test ./... >/dev/null || { go test ./... 2>&1 | grep -v 'no test files' >&2; fail "tests failed"; }
