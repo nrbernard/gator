@@ -3,3 +3,8 @@ version: "2"
 linters:
   # errcheck, govet, ineffassign, staticcheck, unused
   default: standard
+
+issues:
+  # Report every finding. The defaults (50 per linter, 3 identical) hide the rest.
+  max-issues-per-linter: 0
+  max-same-issues: 0
