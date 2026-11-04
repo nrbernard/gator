@@ -21,6 +21,7 @@ Migrations run *after* the new binary is live, so for a short window new code se
 - The server parses `internal/views/*.html` relative to the working directory: run it from the repo root.
 - `static/css/output.css` is a build artifact (gitignored); the Docker build generates it.
 - `go-sqlite3` needs cgo.
+- `make hooks` enables the pre-commit hook in `.githooks/` (gofmt, build, lint, test). It needs `golangci-lint` v2, and lints only new issues because existing code has known errcheck findings.
 
 ## Agent skills
 

@@ -1,0 +1,35 @@
+#!/bin/sh
+# Pre-commit checks: format, compile, vet/lint, test.
+# Enable with `make hooks`. Bypass once with `git commit --no-verify`.
+#
+# Checks run against the working tree, not just the staged snapshot,
+# so unstaged edits are included.
+set -eu
+
+# Only run when Go code or anything it builds from is staged.
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '\.go$|^go\.(mod|sum)$|^sql/'; then
+	exit 0
+fi
+
+fail() {
+	echo "pre-commit: $1" >&2
+	exit 1
+}
+
+command -v golangci-lint >/dev/null 2>&1 ||
+	fail "golangci-lint not found; install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
+
+echo "pre-commit: gofmt"
+unformatted=$(gofmt -l $(git ls-files '*.go'))
+[ -z "$unformatted" ] || fail "files need gofmt -w:
+$unformatted"
+
+echo "pre-commit: build"
+go build ./... || fail "build failed"
+
+# Only issues introduced by this commit; existing code has known findings.
+echo "pre-commit: lint"
+golangci-lint run --new-from-rev=HEAD ./... || fail "lint failed"
+
+echo "pre-commit: test"
+go test ./... >/dev/null || { go test ./... 2>&1 | grep -v 'no test files' >&2; fail "tests failed"; }

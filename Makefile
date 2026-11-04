@@ -29,3 +29,9 @@ generate:
 
 test:
 	go test -v ./...
+
+hooks:
+	git config core.hooksPath .githooks
+
+lint:
+	golangci-lint run ./...
