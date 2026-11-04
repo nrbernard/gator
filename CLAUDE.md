@@ -4,9 +4,9 @@ RSS reader: Go + Echo, SQLite via sqlc, server-rendered `html/template` views st
 
 ## Deploys
 
-A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): `make check` (the same checks as the pre-commit hook), then `flyctl deploy`, then `goose up` on the machine. Work on a branch; merging to `main` is a release.
+A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): `make check` (the same checks as the pre-commit hook), then `flyctl deploy`. Work on a branch; merging to `main` is a release.
 
-Migrations run *after* the new binary is live, so for a short window new code serves against the old schema. Make each schema change backward compatible: add a column in one release, start reading it in the next.
+The container runs `goose up` on every start, before the server (Dockerfile `CMD`), so a failed migration fails the deploy's health check. A migration that succeeds stays applied even if the deploy then rolls back to the old code, so keep schema changes backward compatible: add a column in one release, start reading it in the next.
 
 ## Database
 

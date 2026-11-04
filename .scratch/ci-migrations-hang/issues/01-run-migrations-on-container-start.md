@@ -8,12 +8,12 @@
 
 Needs the maintainer's go-ahead on the approach (see Decision below) before it's `ready-for-agent`.
 
-- [ ] The production container applies pending migrations before starting the server, and exits non-zero if they fail
-- [ ] The CI "Run migrations" job, and the "Get machine ID" step that only fed it, are removed
-- [ ] Every remaining CI job has a `timeout-minutes`, so a hang fails in minutes instead of running for GitHub's 6-hour default
-- [ ] `setup-flyctl` is pinned to an exact flyctl version instead of `latest`
-- [ ] The full production image builds locally, and starting it against an empty database applies every migration before the server logs that it's listening
-- [ ] CLAUDE.md's Deploys section and the README's Deploy paragraph describe the new ordering; the "migrations run after the new binary is live" caveat is gone
+- [x] The production container applies pending migrations before starting the server, and exits non-zero if they fail
+- [x] The CI "Run migrations" job, and the "Get machine ID" step that only fed it, are removed
+- [x] Every remaining CI job has a `timeout-minutes`, so a hang fails in minutes instead of running for GitHub's 6-hour default
+- [x] `setup-flyctl` is pinned to an exact flyctl version instead of `latest`
+- [x] The full production image builds locally, and starting it against an empty database applies every migration before the server logs that it's listening
+- [x] CLAUDE.md's Deploys section and the README's Deploy paragraph describe the new ordering; the "migrations run after the new binary is live" caveat is gone
 - [ ] A deploy succeeds on every job, and the live posts page returns 200
 
 ## Diagnosis

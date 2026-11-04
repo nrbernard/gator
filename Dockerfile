@@ -35,4 +35,5 @@ COPY sql/schema ./sql/schema
 
 ENV DATABASE_PATH=/data/gator.db
 EXPOSE 8080
-CMD ["./main"]
+# Apply pending migrations, then serve. A failed migration exits non-zero, so the machine never serves on a half-migrated schema.
+CMD ["sh", "-c", "make migrate-up && exec ./main"]
