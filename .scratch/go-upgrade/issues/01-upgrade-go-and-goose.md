@@ -9,6 +9,7 @@
 - [ ] The module, the Fly build argument, the Docker Compose build argument, and the README prerequisite all name Go 1.27.3; no 1.24 references remain outside vendored skills
 - [ ] The goose library and the goose CLI pinned in the image are both v3.29.0, with the pin's comment intact
 - [ ] golangci-lint is reinstalled with Go ≥ 1.27 and the pre-commit hook passes on the upgrade commit
+- [ ] CI's pinned golangci-lint is also built with Go ≥ 1.27 (a newer pinned release, or the install forced onto the 1.27 toolchain), so `make check` in CI doesn't refuse to lint
 - [ ] `go test ./...` and `make lint` pass on Go 1.27.3
 - [ ] The full production image builds locally, and running it shows the server binary, the compiled CSS, and `goose version: v3.29.0`
 - [ ] The upgrade is the only change in its deploy

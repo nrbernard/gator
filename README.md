@@ -33,4 +33,4 @@ Open http://localhost:8080.
 
 ## Deploy
 
-Pushing to `main` deploys to Fly.io via GitHub Actions: tests, deploy, then migrations on the running machine. The database lives on the `gator_data` volume at `/data/gator.db`.
+Pushing to `main` deploys to Fly.io via GitHub Actions: `make check` (format, build, lint, test), deploy, then migrations on the running machine. The database lives on the `gator_data` volume at `/data/gator.db`.

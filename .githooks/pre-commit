@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit checks: format, compile, vet/lint, test.
+# Pre-commit checks: `make check` (gofmt, build, lint, test).
 # Enable with `make hooks`. Bypass once with `git commit --no-verify`.
 #
 # Checks run against the working tree, not just the staged snapshot,
@@ -17,18 +17,7 @@ fail() {
 }
 
 command -v golangci-lint >/dev/null 2>&1 ||
-	fail "golangci-lint not found; install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
+	fail "golangci-lint not found; install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0"
 
-echo "pre-commit: gofmt"
-unformatted=$(gofmt -l $(git ls-files '*.go'))
-[ -z "$unformatted" ] || fail "files need gofmt -w:
-$unformatted"
-
-echo "pre-commit: build"
-go build ./... || fail "build failed"
-
-echo "pre-commit: lint"
-golangci-lint run ./... || fail "lint failed"
-
-echo "pre-commit: test"
-go test ./... >/dev/null || { go test ./... 2>&1 | grep -v 'no test files' >&2; fail "tests failed"; }
+# Same checks CI runs before deploying.
+make --no-print-directory check || fail "checks failed"

@@ -12,8 +12,13 @@ jobs:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - name: Run tests
-        run: make test
+      - name: Install golangci-lint
+        # Pinned: must be built with a Go at least as new as go.mod's.
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Check format, build, lint, and tests
+        run: make check
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Deploy to Fly.io

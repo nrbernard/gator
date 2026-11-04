@@ -4,7 +4,7 @@ RSS reader: Go + Echo, SQLite via sqlc, server-rendered `html/template` views st
 
 ## Deploys
 
-A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): tests, then `flyctl deploy`, then `goose up` on the machine. Work on a branch; merging to `main` is a release.
+A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): `make check` (the same checks as the pre-commit hook), then `flyctl deploy`, then `goose up` on the machine. Work on a branch; merging to `main` is a release.
 
 Migrations run *after* the new binary is live, so for a short window new code serves against the old schema. Make each schema change backward compatible: add a column in one release, start reading it in the next.
 
