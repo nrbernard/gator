@@ -4,7 +4,7 @@ RSS reader: Go + Echo, SQLite via sqlc, server-rendered `html/template` views st
 
 ## Deploys
 
-A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): `make check` (the same checks as the pre-commit hook), then `flyctl deploy`. Work on a branch; merging to `main` is a release.
+A push to `main` deploys to production (`.github/workflows/fly-deploy.yml`): `make check` (the pre-commit hook's checks, minus its generated-code check), then `flyctl deploy`. Work on a branch; merging to `main` is a release.
 
 The container runs `goose up` on every start, before the server (Dockerfile `CMD`); a failed migration keeps the server from starting. The machine scales to zero, and a deploy leaves a stopped machine stopped, so a new release usually first boots, and migrates, on the next request rather than during the deploy. CI catches broken migrations earlier: `go test` applies every one to a fresh database. A migration that succeeds stays applied even if the deploy then rolls back to the old code, so keep schema changes backward compatible: add a column in one release, start reading it in the next.
 
@@ -21,7 +21,7 @@ Prerequisites, first-run setup (including the hardcoded `nick` user every reques
 
 - The server parses `internal/views/*.html` relative to the working directory: run it from the repo root.
 - `static/css/output.css` is a build artifact (gitignored); the Docker build generates it.
-- The pre-commit hook in `.githooks/` runs gofmt, build, lint, and test.
+- The pre-commit hook in `.githooks/` runs gofmt, build, lint, and test. When the commit stages `sql/queries/`, `sql/schema/`, `sqlc.yaml`, or `internal/database/`, it first runs `go tool sqlc diff` and rejects the commit if the generated code is stale (fix: `make generate`). CI doesn't run that check.
 
 ## Agent skills
 
