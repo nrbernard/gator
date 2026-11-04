@@ -8,7 +8,7 @@ primary_region = 'sea'
 
 [build]
   [build.args]
-    GO_VERSION = '1.24.2'
+    GO_VERSION = '1.27.3'
 
 [env]
   PORT = '8080'

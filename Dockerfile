@@ -1,4 +1,4 @@
-ARG GO_VERSION=1.24.2
+ARG GO_VERSION=1.27.3
 
 FROM alpine:3.19 as tailwind
 WORKDIR /app
@@ -17,7 +17,7 @@ RUN go build -v -o bin/gator cmd/main.go
 
 FROM golang:${GO_VERSION}-bookworm as goose-builder
 # Pinned: newer goose needs a newer Go than GO_VERSION. Keep in step with go.mod.
-RUN go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
+RUN go install github.com/pressly/goose/v3/cmd/goose@v3.29.0
 
 FROM debian:bookworm-slim
 WORKDIR /app

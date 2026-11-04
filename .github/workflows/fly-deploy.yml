@@ -14,9 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install golangci-lint
-        # Pinned: must be built with a Go at least as new as go.mod's.
+        # Pinned, and built with go.mod's Go: it refuses to lint a module targeting a newer Go than it was built with.
         run: |
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          GOTOOLCHAIN="go$(awk '$1 == "go" { print $2 }' go.mod)" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Check format, build, lint, and tests
         run: make check
