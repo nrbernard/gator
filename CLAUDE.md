@@ -17,11 +17,11 @@ Migrations run *after* the new binary is live, so for a short window new code se
 
 ## Running locally
 
-- `make run` starts Tailwind in watch mode and `air` for live reload. It expects the standalone `./tailwindcss` binary at the repo root (gitignored), plus `air` and `goose` on `PATH`.
+Prerequisites, first-run setup (including the hardcoded `nick` user every request depends on), and `make hooks` are in `README.md`.
+
 - The server parses `internal/views/*.html` relative to the working directory: run it from the repo root.
 - `static/css/output.css` is a build artifact (gitignored); the Docker build generates it.
-- `go-sqlite3` needs cgo.
-- `make hooks` enables the pre-commit hook in `.githooks/` (gofmt, build, lint, test). It needs `golangci-lint` v2.
+- The pre-commit hook in `.githooks/` runs gofmt, build, lint, and test.
 
 ## Agent skills
 

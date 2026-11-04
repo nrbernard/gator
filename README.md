@@ -1,89 +1,36 @@
 # gator
-RSS feed aggregator and browser 
+
+A single-user RSS reader: follow feeds, read, save, and mark posts read in the browser. Go + Echo, SQLite, htmx, Tailwind.
 
 ## Prerequisites
 
-To run `gator`, you'll need:
-- Go 1.19 or later
+- Go 1.24 with cgo (a C compiler; `go-sqlite3` needs it)
+- [goose](https://github.com/pressly/goose) for migrations, [air](https://github.com/air-verse/air) for live reload
+- The [standalone Tailwind CLI](https://github.com/tailwindlabs/tailwindcss/releases) (v4), saved as `./tailwindcss` in the repo root
+- [sqlc](https://sqlc.dev) if you change SQL queries; [golangci-lint](https://golangci-lint.run) v2 for the pre-commit hook
 
-## Installation
+## First run
 
-Install the `gator` CLI by running:
-
-```bash
-go install github.com/nrbernard/gator@latest
+```sh
+mkdir -p data
+export DATABASE_PATH=./data/gator.db
+make migrate-up
+sqlite3 data/gator.db "INSERT INTO users (id, name) VALUES ('$(uuidgen | tr A-Z a-z)', 'nick');"
+make hooks
+make run
 ```
 
-## Configuration
+Open http://localhost:8080.
 
-Before using `gator`, you need to set up your configuration file. Create a `.gatorconfig.json` file in your home directory with the following structure:
+- **The user is hardcoded.** Every request runs as the user named `nick` (`internal/middleware/auth.go`), and nothing creates it: without that row, every page returns a 500.
+- **Feeds are fetched on demand.** Posts update when you click **Refresh Posts**; there is no background fetcher.
 
-```json
-{
-    "current_user_name": ""
-}
-```
+## Development
 
-The `current_user_name` will be set automatically when you register or login.
+- `make test` runs the tests; `make lint` runs golangci-lint.
+- After changing `sql/queries/` or `sql/schema/`, run `make generate` to regenerate `internal/database/`.
+- New migrations go in `sql/schema/` as the next numbered file.
 
-## Usage
+## Deploy
 
-### User Management
-
-1. Register a new user:
-```bash
-gator register <username>
-```
-
-2. Login as a user:
-```bash
-gator login <username>
-```
-
-3. List all users:
-```bash
-gator users
-```
-
-### Feed Management
-
-1. Add a new feed:
-```bash
-gator addfeed <feed_name> <feed_url>
-```
-
-2. List all available feeds:
-```bash
-gator feeds
-```
-
-3. Follow a feed:
-```bash
-gator follow <feed_url>
-```
-
-4. List your followed feeds:
-```bash
-gator following
-```
-
-5. Unfollow a feed:
-```bash
-gator unfollow <feed_url>
-```
-
-### Reading Feeds
-
-1. Browse your feed items:
-```bash
-gator browse [count]
-```
-The optional `count` parameter specifies how many items to show (default is 2).
-
-### Feed Aggregation
-
-To start the feed aggregator that periodically fetches new items:
-```bash
-gator agg <interval>
-```
-The `interval` parameter specifies how often to fetch feeds (e.g., "1h" for every hour, "30m" for every 30 minutes).
+Pushing to `main` deploys to Fly.io via GitHub Actions: tests, deploy, then migrations on the running machine. The database lives on the `gator_data` volume at `/data/gator.db`.
