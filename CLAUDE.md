@@ -12,7 +12,7 @@ The container runs `goose up` on every start, before the server (Dockerfile `CMD
 
 - Schema is goose migrations in `sql/schema/NNN_name.sql`, numbered sequentially. Queries are in `sql/queries/`.
 - `internal/database/` is sqlc output. Change the SQL in `sql/queries/` or `sql/schema/`, then run `make generate` and commit the regenerated files with it.
-- `make migrate-*` needs `DATABASE_PATH` set; locally that's `./data/gator.db`.
+- `make` targets default `DATABASE_PATH` to `./data/gator.db`; an exported value overrides it.
 - Service tests get an in-memory SQLite database with the real migrations applied: `setupTestDB` in `internal/service/feed_service_test.go`.
 
 ## Running locally

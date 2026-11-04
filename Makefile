@@ -1,3 +1,6 @@
+# Local default. The production image sets DATABASE_PATH in its environment, which wins.
+DATABASE_PATH ?= ./data/gator.db
+
 build-server:
 	go build -o bin/gator cmd/main.go
 
@@ -29,6 +32,14 @@ generate:
 
 test:
 	go test -v ./...
+
+# First run: create the database, migrate, add the hardcoded `nick` user, enable hooks.
+# Safe to re-run.
+setup:
+	mkdir -p $(dir $(DATABASE_PATH))
+	$(MAKE) migrate-up
+	sqlite3 $(DATABASE_PATH) "INSERT OR IGNORE INTO users (id, name) VALUES ('$$(uuidgen | tr A-Z a-z)', 'nick');"
+	$(MAKE) hooks
 
 hooks:
 	git config core.hooksPath .githooks

@@ -5,24 +5,20 @@ A single-user RSS reader: follow feeds, read, save, and mark posts read in the b
 ## Prerequisites
 
 - Go 1.24 with cgo (a C compiler; `go-sqlite3` needs it)
-- [goose](https://github.com/pressly/goose) for migrations, [air](https://github.com/air-verse/air) for live reload
+- [goose](https://github.com/pressly/goose) for migrations, the `sqlite3` CLI for `make setup`, [air](https://github.com/air-verse/air) for live reload
 - The [standalone Tailwind CLI](https://github.com/tailwindlabs/tailwindcss/releases) (v4), saved as `./tailwindcss` in the repo root
 - [sqlc](https://sqlc.dev) if you change SQL queries; [golangci-lint](https://golangci-lint.run) v2 for the pre-commit hook
 
 ## First run
 
 ```sh
-mkdir -p data
-export DATABASE_PATH=./data/gator.db
-make migrate-up
-sqlite3 data/gator.db "INSERT INTO users (id, name) VALUES ('$(uuidgen | tr A-Z a-z)', 'nick');"
-make hooks
+make setup   # creates ./data/gator.db, migrates, adds the `nick` user, enables hooks
 make run
 ```
 
 Open http://localhost:8080.
 
-- **The user is hardcoded.** Every request runs as the user named `nick` (`internal/middleware/auth.go`), and nothing creates it: without that row, every page returns a 500.
+- **The user is hardcoded.** Every request runs as the user named `nick` (`internal/middleware/auth.go`), and only `make setup` creates it: without that row, every page returns a 500.
 - **Feeds are fetched on demand.** Posts update when you click **Refresh Posts**; there is no background fetcher.
 
 ## Development
