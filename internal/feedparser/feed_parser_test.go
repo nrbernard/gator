@@ -83,7 +83,7 @@ func TestFetchFeed(t *testing.T) {
 			serverResponse: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/rss+xml")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 				<rss version="2.0">
 					<channel>
 						<title>Test Feed</title>
@@ -118,7 +118,7 @@ func TestFetchFeed(t *testing.T) {
 			serverResponse: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/atom+xml")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 			<feed xml:lang="en-US" xmlns="http://www.w3.org/2005/Atom">
 				<id>tag:world.hey.com,2005:/dhh/feed</id>
 				<link rel="alternate" type="text/html" href="https://world.hey.com/dhh"/>
@@ -169,7 +169,7 @@ func TestFetchFeed(t *testing.T) {
 			name: "invalid XML",
 			serverResponse: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("invalid xml content"))
+				_, _ = w.Write([]byte("invalid xml content"))
 			},
 			expectedError: true,
 			expectedFeed:  nil,
@@ -179,7 +179,7 @@ func TestFetchFeed(t *testing.T) {
 			serverResponse: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/rss+xml")
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 				<rss version="2.0">
 					<channel>
 						<title>Test &amp; Feed</title>

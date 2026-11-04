@@ -73,9 +73,11 @@ func (h *PostHandler) Index(c echo.Context) error {
 			"Selected": "unread",
 		})
 	} else {
-		c.Render(http.StatusOK, "tabs", map[string]interface{}{
+		if err := c.Render(http.StatusOK, "tabs", map[string]interface{}{
 			"Selected": statusParam,
-		})
+		}); err != nil {
+			return err
+		}
 
 		return c.Render(http.StatusOK, "oob-posts", map[string]interface{}{
 			"Posts": posts,
@@ -115,9 +117,11 @@ func (h *PostHandler) Refresh(c echo.Context) error {
 		return fmt.Errorf("failed to fetch posts: %s", err)
 	}
 
-	c.Render(http.StatusOK, "posts-refresh", map[string]interface{}{
+	if err := c.Render(http.StatusOK, "posts-refresh", map[string]interface{}{
 		"LastRefresh": time.Now().Format(time.RFC3339),
-	})
+	}); err != nil {
+		return err
+	}
 
 	return c.Render(http.StatusOK, "oob-posts", map[string]interface{}{
 		"Posts": posts,

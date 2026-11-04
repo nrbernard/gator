@@ -302,7 +302,7 @@ func FetchFeedWithConditionals(ctx context.Context, feedURL string, etag, lastMo
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	result := &FetchResult{
 		StatusCode:   resp.StatusCode,

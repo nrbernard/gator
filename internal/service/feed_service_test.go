@@ -24,7 +24,7 @@ func setupTestDB(t *testing.T) *database.Queries {
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	// Each connection to :memory: is a separate database; pin to one so
 	// migrations and queries see the same schema.
 	db.SetMaxOpenConns(1)

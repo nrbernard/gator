@@ -17,7 +17,7 @@ func main() {
 		fmt.Printf("Failed to connect to database: %s\n", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	dbQueries := database.New(db)
 

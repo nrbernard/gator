@@ -40,7 +40,7 @@ func TestFetchFeedWithConditionals(t *testing.T) {
     </item>
   </channel>
 </rss>`
-		w.Write([]byte(rssContent))
+		_, _ = w.Write([]byte(rssContent))
 	}))
 	defer server.Close()
 
@@ -120,7 +120,7 @@ func TestFetchFeedWithConditionals_ErrorHandling(t *testing.T) {
 	// Test server that returns 429 Too Many Requests
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
-		w.Write([]byte("Rate limited"))
+		_, _ = w.Write([]byte("Rate limited"))
 	}))
 	defer server.Close()
 

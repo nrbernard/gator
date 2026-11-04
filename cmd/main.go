@@ -101,5 +101,8 @@ func main() {
 	e.POST("/feeds", feedHandler.Create)
 	e.DELETE("/feeds/:id", feedHandler.Delete)
 
-	e.Start(":8080")
+	if err := e.Start(":8080"); err != nil {
+		fmt.Printf("Server stopped: %s\n", err)
+		os.Exit(1)
+	}
 }
