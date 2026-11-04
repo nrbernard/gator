@@ -16,7 +16,8 @@ COPY . .
 RUN go build -v -o bin/gator cmd/main.go
 
 FROM golang:${GO_VERSION}-bookworm as goose-builder
-RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+# Pinned: newer goose needs a newer Go than GO_VERSION. Keep in step with go.mod.
+RUN go install github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 FROM debian:bookworm-slim
 WORKDIR /app
