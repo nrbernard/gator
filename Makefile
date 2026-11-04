@@ -28,7 +28,7 @@ reset:
 	$(MAKE) migrate-up
 
 generate:
-	sqlc generate
+	go tool sqlc generate
 
 test:
 	go test -v ./...
