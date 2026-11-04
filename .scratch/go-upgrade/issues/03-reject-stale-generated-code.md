@@ -4,10 +4,14 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The hook runs the generated-code check only when the commit touches SQL queries or schema, so other commits are no slower
-- [ ] Changing a query without regenerating makes the hook fail with a message naming `make generate`
-- [ ] Changing a query and regenerating passes the hook
-- [ ] The check uses the pinned sqlc from ticket 02, not a separately installed one
-- [ ] CLAUDE.md's description of the hook's checks includes the new one
+- [x] The hook runs the generated-code check only when the commit touches SQL queries or schema, so other commits are no slower
+- [x] Changing a query without regenerating makes the hook fail with a message naming `make generate`
+- [x] Changing a query and regenerating passes the hook
+- [x] The check uses the pinned sqlc from ticket 02, not a separately installed one
+- [x] CLAUDE.md's description of the hook's checks includes the new one
+
+## Comments
+
+Implemented on branch `go-upgrade` in ac3c2a5, extended by review fix 1eefd09. The check runs when the commit stages `sql/queries/`, `sql/schema/` (including deletions), `sqlc.yaml`, `internal/database/` or `go.mod`. It regenerates into a temp dir with the pinned sqlc and diffs against `internal/database/`, because `sqlc diff` misses generated files left behind by a deleted query. CI doesn't run it, so `--no-verify` can still bypass it.

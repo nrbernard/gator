@@ -4,12 +4,16 @@
 
 **Blocked by:** 01 (sqlc v1.31.1 requires Go 1.26)
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] sqlc is declared as a tool dependency in the module at an exact version
-- [ ] `make generate` uses the pinned tool and works on a machine with no sqlc installed
-- [ ] The regenerated code is committed; the diff shows only what the new sqlc version changes, reviewed as its own commit
-- [ ] Running `sqlc diff` with the pinned tool reports no differences
-- [ ] The module's `go` directive is unchanged by adding the tool
-- [ ] `go test ./...` passes and the pre-commit hook passes on the commit
-- [ ] README and CLAUDE.md no longer tell people to install sqlc separately
+- [x] sqlc is declared as a tool dependency in the module at an exact version
+- [x] `make generate` uses the pinned tool and works on a machine with no sqlc installed
+- [x] The regenerated code is committed; the diff shows only what the new sqlc version changes, reviewed as its own commit
+- [x] Running `sqlc diff` with the pinned tool reports no differences
+- [x] The module's `go` directive is unchanged by adding the tool
+- [x] `go test ./...` passes and the pre-commit hook passes on the commit
+- [x] README and CLAUDE.md no longer tell people to install sqlc separately
+
+## Comments
+
+Implemented on branch `go-upgrade`: a07343d pins sqlc v1.31.1 as a `tool` and points `make generate` at `go tool sqlc`; da410a1 is the regeneration, which only changes the `sqlc v1.28.0` → `v1.31.1` header in the seven generated files. Ships as its own deploy after ticket 01's.
