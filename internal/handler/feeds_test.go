@@ -114,6 +114,22 @@ func TestFeeds_RemovingAFeedKeepsItsReadingListArchiveAndTrashPostsWithItsName(t
 	}
 }
 
+func TestFeeds_TheEmptyQueuesLastFetchIgnoresRemovedFeeds(t *testing.T) {
+	app := newTestApp(t)
+	other := app.followedFeed(t, "Other Feed")
+	for id, at := range map[uuid.UUID]string{app.feedID: "2026-11-04 09:30:00", other: "2026-11-03 08:15:00"} {
+		if _, err := app.db.Exec("UPDATE feeds SET last_fetched_at = ? WHERE id = ?", at, id.String()); err != nil {
+			t.Fatalf("set last_fetched_at: %v", err)
+		}
+	}
+
+	app.removeFeed(t)
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+	assertContains(t, body, "caught up", `datetime="2026-11-03T08:15:00Z"`)
+	assertNotContains(t, body, "2026-11-04T09:30:00Z")
+}
+
 func TestFeeds_EachFeedShowsItsLastFetchAndLastError(t *testing.T) {
 	app := newTestApp(t)
 	broken := app.followedFeed(t, "Broken Feed")

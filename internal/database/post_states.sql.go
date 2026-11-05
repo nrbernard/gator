@@ -119,12 +119,14 @@ const getLastFetchedAt = `-- name: GetLastFetchedAt :one
 SELECT feeds.last_fetched_at
 FROM feeds
 WHERE feeds.id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND feeds.removed_at IS NULL
 AND feeds.last_fetched_at IS NOT NULL
 ORDER BY feeds.last_fetched_at DESC
 LIMIT 1
 `
 
-// When gator last fetched any of the user's Feeds, for the empty Queue.
+// When gator last fetched any of the user's Feeds that they haven't removed,
+// for the empty Queue.
 func (q *Queries) GetLastFetchedAt(ctx context.Context, userID string) (sql.NullTime, error) {
 	row := q.db.QueryRowContext(ctx, getLastFetchedAt, userID)
 	var last_fetched_at sql.NullTime

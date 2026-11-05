@@ -37,10 +37,12 @@ AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id A
 AND datetime(posts.created_at) > datetime(@cutoff);
 
 -- name: GetLastFetchedAt :one
--- When gator last fetched any of the user's Feeds, for the empty Queue.
+-- When gator last fetched any of the user's Feeds that they haven't removed,
+-- for the empty Queue.
 SELECT feeds.last_fetched_at
 FROM feeds
 WHERE feeds.id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND feeds.removed_at IS NULL
 AND feeds.last_fetched_at IS NOT NULL
 ORDER BY feeds.last_fetched_at DESC
 LIMIT 1;
