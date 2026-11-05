@@ -1,0 +1,9 @@
+# Posts are in exactly one triage state, replacing the Saved and Read flags
+
+Gator is redesigned around triage: every new Post lands in the Queue, and the user Keeps it (Reading list) or Trashes it, later Archiving or Trashing what they kept. We model this as one exclusive state per Post (Queue, Reading list, Archive, Trash) instead of the old independent Saved and Read flags, because independent flags allow combinations triage has no meaning for (saved and trashed, archived but in the Queue), and every Post needs exactly one answer to "where is it?". Read survives only as a mark on Reading list Posts. The Trash remembers where each Post came from, so a restore returns it there, and nothing is ever purged.
+
+## Consequences
+
+- **Migration of existing data.** Saved Posts move to the Reading list with their Read mark. Unsaved, unread Posts move to the Queue. Unsaved, *read* Posts move to the Trash, not the Archive: `scripts/mark_read.go` once marked every Post except each user's newest as read, so "read" in the old data does not mean the user read it, and the Archive would claim they had. They remain restorable from the Trash.
+- **Removing a Feed no longer deletes its kept Posts.** Only its Queue Posts go; Posts on the Reading list, in the Archive, or in the Trash stay. Today `posts.feed_id` cascades on delete, so this needs a schema change.
+- **Schema change across releases.** Deploys must stay backward compatible (see `CLAUDE.md`). The state lives in a new table, which the previous release's code simply ignores, so one release can add it, backfill it, and read it. The old `post_saves` / `post_reads` tables are dropped only in a later release, once nothing reads them. A rollback after the backfill loses triage done in the new release to the old code's view; that is accepted for a single user.
