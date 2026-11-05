@@ -1,0 +1,36 @@
+{{/* The Archive: most recently archived first. Each per-Post action responds
+     with this block for htmx to swap in place. */}}
+{{ block "archive" . }}
+<section id="archive">
+  {{ if . }}
+    <ul class="space-y-4">
+      {{ range . }}
+        {{ template "archive-item" . }}
+      {{ end }}
+    </ul>
+  {{ else }}
+    <p class="text-gray-600 py-8">Nothing in the Archive. Archive Posts you've finished from the <a href="/reading-list" class="text-blue-600 hover:text-blue-800">Reading list</a>.</p>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ block "archive-item" . }}
+<li id="post-{{ .ID }}" class="border-b border-neutral-200 pb-4">
+  <div class="flex justify-between text-sm text-gray-600 mb-1">
+    <span>{{ .FeedName }}</span>
+    <span>{{ .PublishedAt.Format "January 2, 2006" }}</span>
+  </div>
+  <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
+  {{ template "archive-actions" . }}
+</li>
+{{ end }}
+
+{{/* One button per move from the Archive. */}}
+{{ block "archive-actions" . }}
+<div class="flex gap-2 mt-2 text-sm">
+  <button hx-post="/archive/{{ .ID }}/unarchive" hx-target="#archive" hx-swap="outerHTML"
+    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Move to Reading list</button>
+  <button hx-post="/archive/{{ .ID }}/trash" hx-target="#archive" hx-swap="outerHTML"
+    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
+</div>
+{{ end }}

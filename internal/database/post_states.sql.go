@@ -47,6 +47,59 @@ func (q *Queries) CountQueuePostsCreatedBy(ctx context.Context, arg CountQueuePo
 	return count, err
 }
 
+const getArchivePosts = `-- name: GetArchivePosts :many
+SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
+FROM post_states
+JOIN posts ON posts.id = post_states.post_id
+JOIN feeds ON feeds.id = posts.feed_id
+WHERE post_states.user_id = ?1 AND post_states.place = 'archive'
+ORDER BY post_states.changed_at DESC
+`
+
+type GetArchivePostsRow struct {
+	ID          string
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedID      string
+	FeedName    string
+	ReadAt      sql.NullTime
+}
+
+// Most recently archived first: changed_at is when the Post entered the Archive.
+func (q *Queries) GetArchivePosts(ctx context.Context, userID string) ([]GetArchivePostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getArchivePosts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetArchivePostsRow
+	for rows.Next() {
+		var i GetArchivePostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Url,
+			&i.Description,
+			&i.PublishedAt,
+			&i.FeedID,
+			&i.FeedName,
+			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLastFetchedAt = `-- name: GetLastFetchedAt :one
 SELECT feeds.last_fetched_at
 FROM feeds

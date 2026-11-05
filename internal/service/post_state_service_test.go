@@ -158,6 +158,60 @@ func TestPostStateService_ToggleReadFlipsTheMarkOnAReadingListPost(t *testing.T)
 	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList})
 }
 
+func TestPostStateService_ArchiveMovesAReadingListPostToTheArchive(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Finished with it", time.Now())
+	if err := s.Open(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := s.Archive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceArchive, Read: true})
+}
+
+func TestPostStateService_UnarchiveMovesAnArchivedPostBackToTheReadingList(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Worth rereading", time.Now())
+	if err := s.Open(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := s.Archive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if err := s.Unarchive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Unarchive: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList, Read: true})
+}
+
+func TestPostStateService_TrashMovesAnArchivedPostToTheTrashFromTheArchive(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Not worth keeping", time.Now())
+	if err := s.Keep(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+	if err := s.Archive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if err := s.Trash(ctx, f.userID, postID, PlaceArchive); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceTrash, TrashedFrom: PlaceArchive})
+}
+
 func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	type move func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error
 	keep := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
@@ -173,6 +227,12 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	}
 	toggleRead := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
 		return s.ToggleRead(ctx, userID, postID)
+	}
+	archive := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Archive(ctx, userID, postID)
+	}
+	unarchive := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Unarchive(ctx, userID, postID)
 	}
 	trashed := PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue}
 
@@ -190,6 +250,12 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 		{"open a trashed post", []move{trashFrom(PlaceQueue)}, open, trashed},
 		{"toggle read on a Queue post", nil, toggleRead, PostState{Place: PlaceQueue}},
 		{"toggle read on a trashed post", []move{trashFrom(PlaceQueue)}, toggleRead, trashed},
+		{"archive a Queue post", nil, archive, PostState{Place: PlaceQueue}},
+		{"archive an archived post", []move{keep, archive}, archive, PostState{Place: PlaceArchive}},
+		{"archive a trashed post", []move{trashFrom(PlaceQueue)}, archive, trashed},
+		{"unarchive a Queue post", nil, unarchive, PostState{Place: PlaceQueue}},
+		{"unarchive a Reading list post", []move{keep}, unarchive, PostState{Place: PlaceReadingList}},
+		{"trash an archived post seen on the Reading list", []move{keep, archive}, trashFrom(PlaceReadingList), PostState{Place: PlaceArchive}},
 	}
 
 	for _, tc := range tests {
