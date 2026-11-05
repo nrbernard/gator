@@ -57,6 +57,15 @@ type PostSafe struct {
 	UserID    string
 }
 
+type PostState struct {
+	UserID      string
+	PostID      string
+	Place       string
+	TrashedFrom sql.NullString
+	ReadAt      sql.NullTime
+	ChangedAt   time.Time
+}
+
 type User struct {
 	ID        string
 	CreatedAt time.Time
