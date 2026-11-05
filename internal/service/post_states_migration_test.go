@@ -33,38 +33,48 @@ func TestPostStatesMigration_BackfillsFromSavesAndReads(t *testing.T) {
 		t.Fatalf("migrate to %d: %v", lastVersionBeforePostStates, err)
 	}
 
-	f := newFixture(t, database.New(db))
+	// Seed with plain SQL: the generated queries track the latest schema.
 	exec := func(query string, args ...any) {
 		t.Helper()
 		if _, err := db.ExecContext(ctx, query, args...); err != nil {
 			t.Fatalf("%s: %v", query, err)
 		}
 	}
+	userID, feedID := uuid.New(), uuid.New()
+	exec(`INSERT INTO users (id, name) VALUES (?, 'nick')`, userID.String())
+	exec(`INSERT INTO feeds (id, name, url, user_id) VALUES (?, 'Feed', 'http://example.com/feed', ?)`, feedID.String(), userID.String())
+	exec(`INSERT INTO feed_follows (id, user_id, feed_id) VALUES (?, ?, ?)`, uuid.NewString(), userID.String(), feedID.String())
+	post := func() uuid.UUID {
+		id := uuid.New()
+		exec(`INSERT INTO posts (id, title, url, published_at, feed_id) VALUES (?, 'Post', ?, ?, ?)`,
+			id.String(), "http://example.com/"+id.String(), time.Now(), feedID.String())
+		return id
+	}
 	save := func(postID uuid.UUID) {
-		exec(`INSERT INTO post_saves (id, post_id, user_id) VALUES (?, ?, ?)`, uuid.NewString(), postID.String(), f.userID.String())
+		exec(`INSERT INTO post_saves (id, post_id, user_id) VALUES (?, ?, ?)`, uuid.NewString(), postID.String(), userID.String())
 	}
 	read := func(postID uuid.UUID) {
-		exec(`INSERT INTO post_reads (id, post_id, user_id) VALUES (?, ?, ?)`, uuid.NewString(), postID.String(), f.userID.String())
+		exec(`INSERT INTO post_reads (id, post_id, user_id) VALUES (?, ?, ?)`, uuid.NewString(), postID.String(), userID.String())
 	}
 
-	savedRead := f.post(t, "saved and read", time.Now())
+	savedRead := post()
 	save(savedRead)
 	read(savedRead)
-	savedUnread := f.post(t, "saved, unread", time.Now())
+	savedUnread := post()
 	save(savedUnread)
-	unsavedRead := f.post(t, "read, not saved", time.Now())
+	unsavedRead := post()
 	read(unsavedRead)
-	unsavedUnread := f.post(t, "neither", time.Now())
+	unsavedUnread := post()
 
 	if _, err := provider.Up(ctx); err != nil {
 		t.Fatalf("apply remaining migrations: %v", err)
 	}
 
-	s := &PostStateService{Repo: f.queries}
-	assertState(t, s, f.userID, savedRead, PostState{Place: PlaceReadingList, Read: true})
-	assertState(t, s, f.userID, savedUnread, PostState{Place: PlaceReadingList})
-	assertState(t, s, f.userID, unsavedRead, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
-	assertState(t, s, f.userID, unsavedUnread, PostState{Place: PlaceQueue})
+	s := &PostStateService{Repo: database.New(db)}
+	assertState(t, s, userID, savedRead, PostState{Place: PlaceReadingList, Read: true})
+	assertState(t, s, userID, savedUnread, PostState{Place: PlaceReadingList})
+	assertState(t, s, userID, unsavedRead, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
+	assertState(t, s, userID, unsavedUnread, PostState{Place: PlaceQueue})
 
 	// Additive: the previous release's tables keep their rows.
 	for table, want := range map[string]int{"post_saves": 2, "post_reads": 2} {
