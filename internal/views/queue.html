@@ -1,40 +1,45 @@
-{{ block "nav" . }}
-<header class="flex items-baseline justify-between mb-8">
-  <h1 class="text-3xl font-bold">
-    <a href="/" class="text-gray-900 hover:text-blue-600 transition-colors">Gator</a>
-  </h1>
-  <nav class="flex gap-4 text-blue-600">
-    <a href="/" class="hover:text-blue-800">Queue</a>
-    <a href="/reading-list" class="hover:text-blue-800">Reading list</a>
-    <a href="/feeds" class="hover:text-blue-800">Feeds</a>
-  </nav>
-</header>
-{{ end }}
-
-{{/* The top of the Queue: one Post with Keep and Trash, or the empty Queue.
-     Each triage action responds with this block for the next Post. */}}
+{{/* The Queue screen: header with the count, one Post's card, and Keep and Trash in the
+     thumb zone, or the empty Queue. Each triage action responds with this block for the
+     next Post, so the header's count updates with it. */}}
 {{ block "queue" . }}
-<section id="queue" class="mb-8">
-  {{ with .Next }}
-    <p class="text-sm text-gray-600 mb-2">{{ $.Count }} left</p>
-    <article class="bg-white rounded border border-neutral-200 p-4 mb-4">
-      <div class="flex justify-between text-sm text-gray-600 mb-2">
-        <span>{{ .FeedName }}</span>
-        <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "January 2, 2006 15:04" }}</time>
-      </div>
-      <h3 class="text-xl font-semibold text-gray-900 mb-2">
-        <a href="{{ .Link }}" target="_blank" rel="noopener">{{ .Title }}</a>
-      </h3>
-      <p class="text-gray-700">{{ .Description }}</p>
-    </article>
-    <div class="flex gap-4">
-      <button hx-post="/queue/{{ .ID }}/trash" hx-target="#queue" hx-swap="outerHTML"
-        class="flex-1 px-4 py-2 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
-      <button hx-post="/queue/{{ .ID }}/keep" hx-target="#queue" hx-swap="outerHTML"
-        class="flex-1 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600">Keep</button>
+<div id="queue" class="flex flex-1 flex-col">
+  <header class="app-header">
+    <div class="flex min-w-0 items-center gap-2.5">
+      <h1 class="app-title">Queue</h1>
+      {{ if .Next }}<span class="text-sm text-white/60 tabular-nums">{{ .Count }} left</span>{{ end }}
     </div>
+    {{ template "header-nav" "Queue" }}
+  </header>
+  {{ with .Next }}
+    <main class="queue-stage">
+      <article class="card card-in queue-card">
+        <p class="card-meta"><span class="font-semibold text-neutral-800">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time></p>
+        <h2 class="card-title"><a href="{{ .Link }}" target="_blank" rel="noopener" class="card-title-link">{{ .Title }}</a></h2>
+        {{ if .Description }}
+          <p id="description-{{ .ID }}" class="card-description clamp" data-clamp>{{ .Description }}</p>
+        {{ end }}
+        <div class="mt-4 flex items-center justify-between text-[13px]">
+          {{ if .Description }}
+            <button type="button" class="card-action" data-clamp-toggle aria-controls="description-{{ .ID }}" aria-expanded="false" hidden>Show more</button>
+          {{ end }}
+          <a href="{{ .Link }}" target="_blank" rel="noopener" class="card-action ml-auto font-medium text-neutral-700">Open {{ template "icon-arrow-up-right" "size-3.5" }}</a>
+        </div>
+      </article>
+    </main>
+    <footer class="triage-bar">
+      <button hx-post="/queue/{{ .ID }}/trash" hx-target="#queue" hx-swap="outerHTML" class="button button-secondary h-12">Trash</button>
+      <button hx-post="/queue/{{ .ID }}/keep" hx-target="#queue" hx-swap="outerHTML" class="button button-primary h-12">Keep</button>
+    </footer>
   {{ else }}
-    <p class="text-gray-600 py-8">The Queue is empty. <a href="/reading-list" class="text-blue-600 hover:text-blue-800">Go to the Reading list</a></p>
+    <main class="flex flex-1 flex-col items-center justify-center pb-32 text-center">
+      <div class="grid size-11 place-items-center rounded-full bg-white/10 text-accent">{{ template "icon-check" "size-5" }}</div>
+      <h2 class="mt-5 text-xl font-semibold text-balance">All caught up</h2>
+      <p class="mt-1.5 text-sm text-white/60">The Queue is empty.</p>
+      <div class="mt-6 flex items-center gap-2">
+        <a href="/reading-list" class="button button-primary">Open Reading list</a>
+        <button type="button" hx-post="/queue/refresh" hx-target="#queue" hx-swap="outerHTML" class="button button-secondary">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
+      </div>
+    </main>
   {{ end }}
-</section>
+</div>
 {{ end }}

@@ -12,10 +12,14 @@ type Handlers struct {
 	ReadingList *ReadingListHandler
 	Post        *PostHandler
 	Feed        *FeedHandler
+	// StaticDir is the directory served at /static: fonts, scripts, and the Tailwind build.
+	StaticDir string
 }
 
 // Register adds the app's routes to e.
 func Register(e *echo.Echo, h Handlers) {
+	e.Static("/static", h.StaticDir)
+
 	e.GET("/", h.Queue.Index)
 	e.GET("/posts", func(c echo.Context) error {
 		return c.Redirect(http.StatusMovedPermanently, "/")

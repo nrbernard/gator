@@ -1,54 +1,41 @@
-{{ block "posts-refresh" . }}
-<div class="mb-4 flex items-center gap-4">
-    <button
-      hx-post="/queue/refresh"
-      hx-target="#queue"
-      hx-swap="outerHTML"
-      hx-indicator="#refresh-indicator"
-      class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-    >
-      Refresh Posts
-    </button>
-    <span id="refresh-indicator" class="htmx-indicator text-gray-600 text-sm">Fetching...</span>
-</div>
-{{ end }}
-
 {{ block "posts-search" . }}
   <div class="mb-6">
-    <input
-      type="search"
-      name="search"
-      placeholder="Begin typing to search posts..."
-      hx-post="/search"
-      hx-trigger="input changed delay:250ms, keyup[key=='Enter']"
-      hx-target="#search-results"
-      hx-swap="outerHTML"
-      hx-indicator="#search-indicator"
-      class="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-    />
-
-    <span id="search-indicator" class="htmx-indicator text-gray-600 text-sm mt-2 block">
-      Searching...
-    </span>
+    <label class="input-group">
+      <span class="sr-only">Search posts</span>
+      {{ template "icon-search" "size-4 shrink-0 text-white/50" }}
+      <input
+        type="search"
+        name="search"
+        placeholder="Search posts"
+        hx-post="/search"
+        hx-trigger="input changed delay:250ms, keyup[key=='Enter']"
+        hx-target="#search-results"
+        hx-swap="outerHTML"
+        hx-indicator="#search-indicator"
+        class="input-bare"
+      />
+      <span id="search-indicator" class="htmx-indicator text-xs text-white/50">Searching…</span>
+    </label>
   </div>
 {{ end }}
 
 {{/* Search matches Posts in every Place; results have no actions yet. */}}
 {{ block "search-results" . }}
-<div id="search-results" class="space-y-4">
+<div id="search-results">
   {{ if .Query }}
-    {{ range .Posts }}
-      <div class="border-b border-neutral-200 pb-4">
-        <div class="flex justify-between text-sm text-gray-600 mb-1">
-          <span>{{ .FeedName }}</span>
-          <span>{{ .PublishedAt.Format "January 2, 2006" }}</span>
-        </div>
-        <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
-        <p class="text-gray-700 line-clamp-3">{{ .Description }}</p>
-      </div>
-    {{ else }}
-      <p class="text-gray-600 text-center py-8">No posts found for "{{ .Query }}".</p>
-    {{ end }}
+    <ul class="post-list mb-8">
+      {{ range .Posts }}
+        <li class="post-row">
+          <div class="min-w-0 flex-1">
+            <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time></p>
+            <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+            {{ if .Description }}<p class="mt-1 line-clamp-2 text-sm text-white/60">{{ .Description }}</p>{{ end }}
+          </div>
+        </li>
+      {{ else }}
+        <li class="py-8 text-center text-sm text-white/60">No posts found for "{{ .Query }}".</li>
+      {{ end }}
+    </ul>
   {{ end }}
 </div>
 {{ end }}

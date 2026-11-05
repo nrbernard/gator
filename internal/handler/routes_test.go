@@ -92,6 +92,7 @@ func newTestApp(t *testing.T) *testApp {
 		ReadingList: &ReadingListHandler{PostService: posts},
 		Post:        &PostHandler{PostService: posts},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
+		StaticDir:   "../../static",
 	})
 	return app
 }
