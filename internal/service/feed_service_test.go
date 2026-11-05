@@ -22,6 +22,13 @@ const schemaDir = "../../sql/schema"
 
 func setupTestDB(t *testing.T) *database.Queries {
 	t.Helper()
+	return database.New(setupTestSQLDB(t))
+}
+
+// setupTestSQLDB is setupTestDB's database handle, for seeding what the
+// queries can't, such as a Post's created_at.
+func setupTestSQLDB(t *testing.T) *sql.DB {
+	t.Helper()
 
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -40,7 +47,7 @@ func setupTestDB(t *testing.T) *database.Queries {
 		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	return database.New(db)
+	return db
 }
 
 func TestFeedService_ScrapeFeeds_WithConditionalRequests(t *testing.T) {

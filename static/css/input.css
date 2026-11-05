@@ -217,6 +217,24 @@
   .post-title {
     @apply mt-1 block rounded-sm font-semibold text-balance text-white decoration-white/30 decoration-2 underline-offset-4 hover:underline;
   }
+  /* A read Post dims its title. */
+  .post-row-read .post-title {
+    @apply font-medium text-white/55;
+  }
+  /* Per-Post actions under a row: small ghost buttons, an icon and a label. */
+  .row-actions {
+    @apply -ml-2 mt-2 flex flex-wrap gap-1;
+  }
+  .row-action {
+    @apply inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] text-white/60 hover:bg-white/10 hover:text-white;
+  }
+  .row-action-danger {
+    @apply hover:bg-red-500/15 hover:text-red-300;
+  }
+  /* A dark panel for a question in place of the card (trash all's confirmation). */
+  .sheet {
+    @apply rounded-2xl border border-white/10 bg-neutral-900 p-6;
+  }
   .empty-state {
     @apply flex flex-col items-center py-24 text-center;
   }

@@ -21,19 +21,50 @@ FROM posts
 WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id);
 
+-- name: GetLastFetchedAt :one
+-- When gator last fetched any of the user's Feeds, for the empty Queue.
+SELECT feeds.last_fetched_at
+FROM feeds
+WHERE feeds.id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND feeds.last_fetched_at IS NOT NULL
+ORDER BY feeds.last_fetched_at DESC
+LIMIT 1;
+
+-- name: CountQueuePostsCreatedBy :one
+-- The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
+-- datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
+SELECT COUNT(*)
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
+AND datetime(posts.created_at) <= datetime(@cutoff);
+
+-- name: TrashQueuePostsCreatedBy :execrows
+-- Trashes, from the Queue, the Posts CountQueuePostsCreatedBy counts.
+INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
+SELECT @user_id, posts.id, 'trash', 'queue', @changed_at
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
+AND datetime(posts.created_at) <= datetime(@cutoff);
+
 -- name: GetReadingListPosts :many
+-- Unread first, then most recently kept: changed_at is when the Post entered
+-- the Reading list.
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
 FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id
 WHERE post_states.user_id = @user_id AND post_states.place = 'reading_list'
-ORDER BY post_states.changed_at DESC;
+ORDER BY post_states.read_at IS NOT NULL, post_states.changed_at DESC;
 
 -- name: SetPostState :exec
+-- changed_at is when the Post entered its Place, so a change to the Read mark
+-- alone keeps it.
 INSERT INTO post_states (user_id, post_id, place, trashed_from, read_at, changed_at)
-VALUES (@user_id, @post_id, @place, @trashed_from, @read_at, CURRENT_TIMESTAMP)
+VALUES (@user_id, @post_id, @place, @trashed_from, @read_at, @changed_at)
 ON CONFLICT (user_id, post_id) DO UPDATE SET
     place = excluded.place,
     trashed_from = excluded.trashed_from,
     read_at = excluded.read_at,
-    changed_at = excluded.changed_at;
+    changed_at = CASE WHEN post_states.place = excluded.place THEN post_states.changed_at ELSE excluded.changed_at END;

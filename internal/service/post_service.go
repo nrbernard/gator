@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
@@ -15,7 +16,8 @@ type PostService struct {
 	Repo *database.Queries
 }
 
-// Queue returns the newest Post in the user's Queue and the Queue's size.
+// Queue returns the newest Post in the user's Queue and the Queue's size or,
+// if the Queue is empty, when gator last fetched the user's Feeds.
 func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue, error) {
 	count, err := s.Repo.CountQueuePosts(ctx, userID.String())
 	if err != nil {
@@ -25,6 +27,14 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue
 
 	row, err := s.Repo.GetNextQueuePost(ctx, userID.String())
 	if errors.Is(err, sql.ErrNoRows) {
+		fetched, err := s.Repo.GetLastFetchedAt(ctx, userID.String())
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return models.Queue{}, fmt.Errorf("get last fetch: %w", err)
+		case fetched.Valid:
+			queue.LastFetchedAt = &fetched.Time
+		}
 		return queue, nil
 	}
 	if err != nil {
@@ -42,7 +52,21 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue
 	return queue, nil
 }
 
-// ReadingList returns the user's kept Posts, most recently kept first.
+// CountQueueCreatedBy returns how many Queue Posts gator fetched at or before
+// cutoff: the Posts PostStateService.TrashAll would trash.
+func (s *PostService) CountQueueCreatedBy(ctx context.Context, userID uuid.UUID, cutoff time.Time) (int, error) {
+	n, err := s.Repo.CountQueuePostsCreatedBy(ctx, database.CountQueuePostsCreatedByParams{
+		UserID: userID.String(),
+		Cutoff: cutoff.UTC(),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("count queue: %w", err)
+	}
+	return int(n), nil
+}
+
+// ReadingList returns the user's kept Posts, unread first, then most recently
+// kept first.
 func (s *PostService) ReadingList(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
 	rows, err := s.Repo.GetReadingListPosts(ctx, userID.String())
 	if err != nil {

@@ -25,6 +25,45 @@ func (q *Queries) CountQueuePosts(ctx context.Context, userID string) (int64, er
 	return count, err
 }
 
+const countQueuePostsCreatedBy = `-- name: CountQueuePostsCreatedBy :one
+SELECT COUNT(*)
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) <= datetime(?2)
+`
+
+type CountQueuePostsCreatedByParams struct {
+	UserID string
+	Cutoff interface{}
+}
+
+// The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
+// datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
+func (q *Queries) CountQueuePostsCreatedBy(ctx context.Context, arg CountQueuePostsCreatedByParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedBy, arg.UserID, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getLastFetchedAt = `-- name: GetLastFetchedAt :one
+SELECT feeds.last_fetched_at
+FROM feeds
+WHERE feeds.id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND feeds.last_fetched_at IS NOT NULL
+ORDER BY feeds.last_fetched_at DESC
+LIMIT 1
+`
+
+// When gator last fetched any of the user's Feeds, for the empty Queue.
+func (q *Queries) GetLastFetchedAt(ctx context.Context, userID string) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getLastFetchedAt, userID)
+	var last_fetched_at sql.NullTime
+	err := row.Scan(&last_fetched_at)
+	return last_fetched_at, err
+}
+
 const getNextQueuePost = `-- name: GetNextQueuePost :one
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name
 FROM posts
@@ -99,7 +138,7 @@ FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id
 WHERE post_states.user_id = ?1 AND post_states.place = 'reading_list'
-ORDER BY post_states.changed_at DESC
+ORDER BY post_states.read_at IS NOT NULL, post_states.changed_at DESC
 `
 
 type GetReadingListPostsRow struct {
@@ -113,6 +152,8 @@ type GetReadingListPostsRow struct {
 	ReadAt      sql.NullTime
 }
 
+// Unread first, then most recently kept: changed_at is when the Post entered
+// the Reading list.
 func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]GetReadingListPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getReadingListPosts, userID)
 	if err != nil {
@@ -147,12 +188,12 @@ func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]Get
 
 const setPostState = `-- name: SetPostState :exec
 INSERT INTO post_states (user_id, post_id, place, trashed_from, read_at, changed_at)
-VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT (user_id, post_id) DO UPDATE SET
     place = excluded.place,
     trashed_from = excluded.trashed_from,
     read_at = excluded.read_at,
-    changed_at = excluded.changed_at
+    changed_at = CASE WHEN post_states.place = excluded.place THEN post_states.changed_at ELSE excluded.changed_at END
 `
 
 type SetPostStateParams struct {
@@ -161,8 +202,11 @@ type SetPostStateParams struct {
 	Place       string
 	TrashedFrom sql.NullString
 	ReadAt      sql.NullTime
+	ChangedAt   time.Time
 }
 
+// changed_at is when the Post entered its Place, so a change to the Read mark
+// alone keeps it.
 func (q *Queries) SetPostState(ctx context.Context, arg SetPostStateParams) error {
 	_, err := q.db.ExecContext(ctx, setPostState,
 		arg.UserID,
@@ -170,6 +214,31 @@ func (q *Queries) SetPostState(ctx context.Context, arg SetPostStateParams) erro
 		arg.Place,
 		arg.TrashedFrom,
 		arg.ReadAt,
+		arg.ChangedAt,
 	)
 	return err
+}
+
+const trashQueuePostsCreatedBy = `-- name: TrashQueuePostsCreatedBy :execrows
+INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
+SELECT ?1, posts.id, 'trash', 'queue', ?2
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) <= datetime(?3)
+`
+
+type TrashQueuePostsCreatedByParams struct {
+	UserID    string
+	ChangedAt time.Time
+	Cutoff    interface{}
+}
+
+// Trashes, from the Queue, the Posts CountQueuePostsCreatedBy counts.
+func (q *Queries) TrashQueuePostsCreatedBy(ctx context.Context, arg TrashQueuePostsCreatedByParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, trashQueuePostsCreatedBy, arg.UserID, arg.ChangedAt, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

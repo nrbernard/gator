@@ -25,10 +25,17 @@ func Register(e *echo.Echo, h Handlers) {
 		return c.Redirect(http.StatusMovedPermanently, "/")
 	})
 	e.POST("/queue/refresh", h.Queue.Refresh)
+	e.GET("/queue/card", h.Queue.Card)
+	e.GET("/queue/trash-all", h.Queue.ConfirmTrashAll)
+	e.POST("/queue/trash-all", h.Queue.TrashAll)
 	e.POST("/queue/:id/keep", h.Queue.Keep)
 	e.POST("/queue/:id/trash", h.Queue.Trash)
+	e.POST("/queue/:id/open", h.Queue.Open)
 
 	e.GET("/reading-list", h.ReadingList.Index)
+	e.POST("/reading-list/:id/open", h.ReadingList.Open)
+	e.POST("/reading-list/:id/read", h.ReadingList.ToggleRead)
+	e.POST("/reading-list/:id/trash", h.ReadingList.Trash)
 
 	e.POST("/search", h.Post.Search)
 

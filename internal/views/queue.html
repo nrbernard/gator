@@ -1,18 +1,18 @@
 {{/* The Queue screen: header with the count, one Post's card, and Keep and Trash in the
      thumb zone, or the empty Queue. Each triage action responds with this block for the
-     next Post, so the header's count updates with it. */}}
+     next Post, so the header's count updates with it. The hx-vals send the page's cutoff
+     with every request from inside it, and each response renders it again. */}}
 {{ block "queue" . }}
-<div id="queue" class="flex flex-1 flex-col">
-  <header class="app-header">
-    <div class="flex min-w-0 items-center gap-2.5">
-      <h1 class="app-title">Queue</h1>
-      {{ if .Next }}<span class="text-sm text-white/60 tabular-nums">{{ .Count }} left</span>{{ end }}
-    </div>
-    {{ template "header-nav" "Queue" }}
-  </header>
+<div id="queue" class="flex flex-1 flex-col" hx-vals='{"cutoff": "{{ .CutoffParam }}"}'>
+  {{ template "queue-header" . }}
   {{ with .Next }}
     <main class="queue-stage">
-      <article class="card card-in queue-card">
+      {{/* Opening the Post Keeps it, marked Read. A link opens the site in a new tab;
+           the click bubbles to the article, which posts the Open and swaps in the next
+           card. htmx would cancel the click on the link itself. */}}
+      <article class="card card-in queue-card"
+        hx-post="/queue/{{ .ID }}/open" hx-trigger="click[target.closest('a')], auxclick[button === 1 &amp;&amp; target.closest('a')]"
+        hx-target="#queue" hx-swap="outerHTML">
         <p class="card-meta"><span class="font-semibold text-neutral-800">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time></p>
         <h2 class="card-title"><a href="{{ .Link }}" target="_blank" rel="noopener" class="card-title-link">{{ .Title }}</a></h2>
         {{ if .Description }}
@@ -22,7 +22,7 @@
           {{ if .Description }}
             <button type="button" class="card-action" data-clamp-toggle aria-controls="description-{{ .ID }}" aria-expanded="false" hidden>Show more</button>
           {{ end }}
-          <a href="{{ .Link }}" target="_blank" rel="noopener" class="card-action ml-auto font-medium text-neutral-700">Open {{ template "icon-arrow-up-right" "size-3.5" }}</a>
+          <a href="{{ .Link }}" target="_blank" rel="noopener" class="card-action ml-auto font-medium text-neutral-700">Open and keep {{ template "icon-arrow-up-right" "size-3.5" }}</a>
         </div>
       </article>
     </main>
@@ -31,14 +31,69 @@
       <button hx-post="/queue/{{ .ID }}/keep" hx-target="#queue" hx-swap="outerHTML" class="button button-primary h-12">Keep</button>
     </footer>
   {{ else }}
-    <main class="flex flex-1 flex-col items-center justify-center pb-32 text-center">
-      <div class="grid size-11 place-items-center rounded-full bg-white/10 text-accent">{{ template "icon-check" "size-5" }}</div>
-      <h2 class="mt-5 text-xl font-semibold text-balance">All caught up</h2>
-      <p class="mt-1.5 text-sm text-white/60">The Queue is empty.</p>
+    <main class="empty-state flex-1 justify-center pb-32">
+      <div class="empty-state-icon">{{ template "icon-check" "size-5" }}</div>
+      <h2 class="mt-5 text-xl font-semibold text-balance">You're caught up</h2>
+      {{ with .LastFetchedAt }}
+        <p class="mt-1.5 text-sm text-white/60">Last fetched <time datetime="{{ .UTC.Format "2006-01-02T15:04:05Z07:00" }}">{{ .UTC.Format "January 2, 2006 15:04" }} UTC</time></p>
+      {{ else }}
+        <p class="mt-1.5 text-sm text-white/60">gator has not fetched any Feeds yet.</p>
+      {{ end }}
       <div class="mt-6 flex items-center gap-2">
         <a href="/reading-list" class="button button-primary">Open Reading list</a>
         <button type="button" hx-post="/queue/refresh" hx-target="#queue" hx-swap="outerHTML" class="button button-secondary">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
       </div>
+    </main>
+  {{ end }}
+</div>
+{{ end }}
+
+{{/* The Queue's header: its count, and a menu with the Queue's own actions after the
+     page links. Takes the Queue. */}}
+{{ block "queue-header" . }}
+<header class="app-header">
+  <div class="flex min-w-0 items-center gap-2.5">
+    <h1 class="app-title">Queue</h1>
+    {{ if .Next }}<span class="text-sm text-white/60 tabular-nums">{{ .Count }} left</span>{{ end }}
+  </div>
+  <nav class="header-nav" aria-label="Main">
+    <a href="/reading-list" class="nav-link">Reading list</a>
+    <details class="menu" data-menu>
+      <summary class="icon-button" aria-label="Menu">{{ template "icon-ellipsis" "size-4" }}</summary>
+      <div class="menu-panel">
+        {{ template "menu-links" "Queue" }}
+        <div class="menu-separator"></div>
+        <button type="button" class="menu-item" hx-post="/queue/refresh" hx-target="#queue" hx-swap="outerHTML">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
+        {{ if .Next }}
+          <button type="button" class="menu-item menu-item-danger" hx-get="/queue/trash-all" hx-target="#queue" hx-swap="outerHTML">{{ template "icon-trash-2" "size-4" }}Trash all {{ .Count }} in the Queue…</button>
+        {{ end }}
+      </div>
+    </details>
+  </nav>
+</header>
+{{ end }}
+
+{{/* Trash all's confirmation, in place of the card, with its buttons where Trash and
+     Keep were. It counts only the Posts fetched by the page's cutoff, which is all
+     trash all trashes. */}}
+{{ block "queue-trash-all" . }}
+<div id="queue" class="flex flex-1 flex-col" hx-vals='{"cutoff": "{{ .CutoffParam }}"}'>
+  {{ template "queue-header" . }}
+  {{ if .Count }}
+    <main class="queue-stage">
+      <section class="sheet animate-rise" aria-labelledby="trash-all-title">
+        <h2 id="trash-all-title" class="text-xl font-semibold text-balance">Trash {{ .Count }} {{ if eq .Count 1 }}post{{ else }}posts{{ end }} from the Queue?</h2>
+        <p class="mt-2 text-sm text-white/60">Posts fetched since this page loaded stay. Anything trashed can be restored from the Trash.</p>
+      </section>
+    </main>
+    <footer class="triage-bar">
+      <button hx-get="/queue/card" hx-target="#queue" hx-swap="outerHTML" class="button button-secondary h-12">Cancel</button>
+      <button hx-post="/queue/trash-all" hx-target="#queue" hx-swap="outerHTML" class="button button-danger h-12">Trash {{ .Count }} {{ if eq .Count 1 }}post{{ else }}posts{{ end }}</button>
+    </footer>
+  {{ else }}
+    <main class="empty-state flex-1 justify-center pb-32">
+      <p class="text-sm text-white/60">Nothing to trash.</p>
+      <button hx-get="/queue/card" hx-target="#queue" hx-swap="outerHTML" class="button button-secondary mt-6">Back to the Queue</button>
     </main>
   {{ end }}
 </div>

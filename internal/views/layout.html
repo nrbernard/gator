@@ -37,25 +37,25 @@
 </header>
 {{ end }}
 
-{{/* "header-nav" takes the current page's title: "Queue", "Reading list", or "Feeds". */}}
+{{/* "header-nav" takes the current page's title: a link to the Queue, and the menu.
+     The Queue writes its own (queue.html, "queue-header") to add its actions to the menu. */}}
 {{ define "header-nav" }}
 <nav class="header-nav" aria-label="Main">
-  {{ if eq . "Queue" }}
-    <a href="/reading-list" class="nav-link">Reading list</a>
-  {{ else }}
-    <a href="/" class="nav-link">Queue</a>
-  {{ end }}
+  <a href="/" class="nav-link">Queue</a>
   <details class="menu" data-menu>
     <summary class="icon-button" aria-label="Menu">{{ template "icon-ellipsis" "size-4" }}</summary>
     <div class="menu-panel">
-      <a href="/" class="menu-item"{{ if eq . "Queue" }} aria-current="page"{{ end }}>{{ template "icon-inbox" "size-4" }}Queue</a>
-      <a href="/reading-list" class="menu-item"{{ if eq . "Reading list" }} aria-current="page"{{ end }}>{{ template "icon-book-open" "size-4" }}Reading list</a>
-      <a href="/feeds" class="menu-item"{{ if eq . "Feeds" }} aria-current="page"{{ end }}>{{ template "icon-rss" "size-4" }}Feeds</a>
-      {{ if eq . "Queue" }}
-        <div class="menu-separator"></div>
-        <button type="button" class="menu-item" hx-post="/queue/refresh" hx-target="#queue" hx-swap="outerHTML">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
-      {{ end }}
+      {{ template "menu-links" . }}
     </div>
   </details>
 </nav>
+{{ end }}
+
+{{/* "menu-links" takes the current page's title and marks that link. A page's own actions
+     go after them, below a <div class="menu-separator">, as .menu-item buttons. */}}
+{{ define "menu-links" }}
+<a href="/" class="menu-item"{{ if eq . "Queue" }} aria-current="page"{{ end }}>{{ template "icon-inbox" "size-4" }}Queue</a>
+<a href="/reading-list" class="menu-item"{{ if eq . "Reading list" }} aria-current="page"{{ end }}>{{ template "icon-book-open" "size-4" }}Reading list</a>
+<a href="/archive" class="menu-item"{{ if eq . "Archive" }} aria-current="page"{{ end }}>{{ template "icon-archive" "size-4" }}Archive</a>
+<a href="/feeds" class="menu-item"{{ if eq . "Feeds" }} aria-current="page"{{ end }}>{{ template "icon-rss" "size-4" }}Feeds</a>
 {{ end }}

@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +33,7 @@ func (r *templateRenderer) Render(w io.Writer, name string, data interface{}, c 
 // user following one Feed.
 type testApp struct {
 	e       *echo.Echo
+	db      *sql.DB
 	queries *database.Queries
 	states  *service.PostStateService
 	userID  uuid.UUID
@@ -73,6 +76,7 @@ func newTestApp(t *testing.T) *testApp {
 
 	app := &testApp{
 		e:       echo.New(),
+		db:      db,
 		queries: queries,
 		states:  &service.PostStateService{Repo: queries},
 		userID:  userID,
@@ -89,7 +93,7 @@ func newTestApp(t *testing.T) *testApp {
 	feeds := &service.FeedService{Repo: queries}
 	Register(app.e, Handlers{
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
-		ReadingList: &ReadingListHandler{PostService: posts},
+		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
 		Post:        &PostHandler{PostService: posts},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
 		StaticDir:   "../../static",
@@ -198,6 +202,132 @@ func TestQueue_TriageMovesThePostAndRespondsWithTheNextCard(t *testing.T) {
 	}
 }
 
+func TestQueue_OpeningTheCardGoesToTheSiteAndKeepsThePostMarkedRead(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	next := app.post(t, "Next post", "", now.Add(-1*time.Hour))
+	top := app.post(t, "Top post", "", now)
+
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	assertContains(t, page,
+		`href="http://example.com/posts/`+top.String()+`" target="_blank"`,
+		`hx-post="/queue/`+top.String()+`/open"`)
+
+	body := app.request(t, http.MethodPost, "/queue/"+top.String()+"/open", nil).Body.String()
+
+	state, err := app.states.State(context.Background(), app.userID, top)
+	if err != nil {
+		t.Fatalf("State: %v", err)
+	}
+	if want := (service.PostState{Place: service.PlaceReadingList, Read: true}); state != want {
+		t.Errorf("opened post is %+v, want %+v", state, want)
+	}
+	app.assertPlace(t, next, service.PlaceQueue)
+	assertContains(t, body, `id="queue"`, "Next post", "1 left")
+	assertNotContains(t, body, "Top post", "<html")
+}
+
+// fetchedAfterPageLoad makes the Post look fetched a minute from now, after any
+// Queue page loaded in the test.
+func (a *testApp) fetchedAfterPageLoad(t *testing.T, postID uuid.UUID) {
+	t.Helper()
+	later := time.Now().Add(time.Minute).UTC().Format(time.DateTime)
+	if _, err := a.db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", later, postID.String()); err != nil {
+		t.Fatalf("set created_at: %v", err)
+	}
+}
+
+var cutoffPattern = regexp.MustCompile(`"cutoff":\s*"([^"]+)"`)
+
+// pageCutoff is the cutoff the Queue page recorded, which its requests send.
+func pageCutoff(t *testing.T, body string) string {
+	t.Helper()
+	m := cutoffPattern.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("page records no cutoff; body:\n%s", body)
+	}
+	return m[1]
+}
+
+func TestQueue_TrashAllAsksFirstWithTheNumberOfPostsItWillTrash(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	first := app.post(t, "First post", "", now.Add(-1*time.Hour))
+	second := app.post(t, "Second post", "", now)
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	assertContains(t, page, `hx-get="/queue/trash-all"`)
+	unseen := app.post(t, "Fetched after the page loaded", "", now)
+	app.fetchedAfterPageLoad(t, unseen)
+
+	cutoff := pageCutoff(t, page)
+	body := app.request(t, http.MethodGet, "/queue/trash-all?cutoff="+url.QueryEscape(cutoff), nil).Body.String()
+
+	assertContains(t, body, `id="queue"`, "Trash 2 posts", `hx-post="/queue/trash-all"`, `hx-get="/queue/card"`)
+	assertNotContains(t, body, "<html")
+	for _, id := range []uuid.UUID{first, second, unseen} {
+		app.assertPlace(t, id, service.PlaceQueue)
+	}
+
+	cancelled := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(cutoff), nil).Body.String()
+
+	if got := pageCutoff(t, cancelled); got != cutoff {
+		t.Errorf("cancel moved the cutoff from %s to %s", cutoff, got)
+	}
+	assertContains(t, cancelled, `id="queue"`, "3 left")
+}
+
+func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	first := app.post(t, "First post", "", now.Add(-1*time.Hour))
+	second := app.post(t, "Second post", "", now)
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	unseen := app.post(t, "Fetched after the page loaded", "", now)
+	app.fetchedAfterPageLoad(t, unseen)
+
+	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
+	body := app.request(t, http.MethodPost, "/queue/trash-all", strings.NewReader(form)).Body.String()
+
+	app.assertPlace(t, first, service.PlaceTrash)
+	app.assertPlace(t, second, service.PlaceTrash)
+	app.assertPlace(t, unseen, service.PlaceQueue)
+	assertContains(t, body, `id="queue"`, "Fetched after the page loaded", "1 left")
+	assertNotContains(t, body, "<html")
+}
+
+func TestQueue_TrashAllWithoutACutoffTrashesNothing(t *testing.T) {
+	app := newTestApp(t)
+	post := app.post(t, "A post", "", time.Now())
+
+	rec := httptest.NewRecorder()
+	app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/queue/trash-all", nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	app.assertPlace(t, post, service.PlaceQueue)
+}
+
+func TestQueue_EmptyQueueSaysCaughtUpWithTheLastFetchTime(t *testing.T) {
+	app := newTestApp(t)
+	if _, err := app.db.Exec("UPDATE feeds SET last_fetched_at = ? WHERE id = ?", "2026-11-04 09:30:00", app.feedID.String()); err != nil {
+		t.Fatalf("set last_fetched_at: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	assertContains(t, body, "caught up", `datetime="2026-11-04T09:30:00Z"`, "November 4, 2026 09:30", `href="/reading-list"`)
+	assertNotContains(t, body, "Trash all")
+}
+
+func TestQueue_EmptyQueueBeforeAnyFetchSaysSo(t *testing.T) {
+	app := newTestApp(t)
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	assertContains(t, body, "caught up", "not fetched any Feeds yet")
+}
+
 func TestQueue_TriagingTheLastPostRespondsWithAnEmptyQueue(t *testing.T) {
 	app := newTestApp(t)
 	last := app.post(t, "Last post", "", time.Now())
@@ -205,7 +335,7 @@ func TestQueue_TriagingTheLastPostRespondsWithAnEmptyQueue(t *testing.T) {
 	body := app.request(t, http.MethodPost, "/queue/"+last.String()+"/keep", nil).Body.String()
 
 	app.assertPlace(t, last, service.PlaceReadingList)
-	assertContains(t, body, "The Queue is empty", `href="/reading-list"`)
+	assertContains(t, body, "caught up", `href="/reading-list"`)
 	assertNotContains(t, body, "Last post")
 }
 
@@ -226,6 +356,99 @@ func TestReadingList_ListsKeptPosts(t *testing.T) {
 
 	assertContains(t, body, "Kept post", "Example Feed", "http://example.com/posts/"+kept.String())
 	assertNotContains(t, body, "Trashed post", "Queue post")
+}
+
+func TestReadingList_EachPostOffersOpenReadAndTrashOverHtmx(t *testing.T) {
+	app := newTestApp(t)
+	kept := app.post(t, "Kept post", "", time.Now())
+	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/reading-list", nil).Body.String()
+
+	id := kept.String()
+	assertContains(t, body, `id="reading-list"`, "htmx",
+		`hx-post="/reading-list/`+id+`/open"`, `hx-post="/reading-list/`+id+`/read"`, `hx-post="/reading-list/`+id+`/trash"`,
+		">Mark read<")
+}
+
+func TestReadingList_ActionsUpdateTheListInPlace(t *testing.T) {
+	tests := []struct {
+		action   string
+		want     service.PostState
+		wantBody []string
+		unwanted []string
+	}{
+		// A read Post stays on the Reading list, offering to mark it unread.
+		{"open", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
+		{"read", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
+		{"trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceReadingList}, nil, []string{"Acted on"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			app := newTestApp(t)
+			ctx := context.Background()
+			other := app.post(t, "Other kept post", "", time.Now())
+			acted := app.post(t, "Acted on", "", time.Now())
+			for _, id := range []uuid.UUID{other, acted} {
+				if err := app.states.Keep(ctx, app.userID, id); err != nil {
+					t.Fatalf("Keep: %v", err)
+				}
+			}
+
+			body := app.request(t, http.MethodPost, "/reading-list/"+acted.String()+"/"+tc.action, nil).Body.String()
+
+			got, err := app.states.State(ctx, app.userID, acted)
+			if err != nil {
+				t.Fatalf("State: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("state = %+v, want %+v", got, tc.want)
+			}
+			assertContains(t, body, append([]string{`id="reading-list"`, "Other kept post"}, tc.wantBody...)...)
+			assertNotContains(t, body, append([]string{"<html"}, tc.unwanted...)...)
+		})
+	}
+}
+
+func TestReadingList_ReadTogglesBackToUnread(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	kept := app.post(t, "Opened by accident", "", time.Now())
+	if err := app.states.Keep(ctx, app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+	if err := app.states.Open(ctx, app.userID, kept); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	body := app.request(t, http.MethodPost, "/reading-list/"+kept.String()+"/read", nil).Body.String()
+
+	got, err := app.states.State(ctx, app.userID, kept)
+	if err != nil {
+		t.Fatalf("State: %v", err)
+	}
+	if got.Read {
+		t.Errorf("post is still read")
+	}
+	assertContains(t, body, "Opened by accident", ">Mark read<")
+}
+
+func TestReadingList_RejectsActionsOnAPostNotOnTheReadingList(t *testing.T) {
+	app := newTestApp(t)
+	queued := app.post(t, "Queue post", "", time.Now())
+
+	for _, action := range []string{"read", "trash"} {
+		rec := httptest.NewRecorder()
+		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/reading-list/"+queued.String()+"/"+action, nil))
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("%s: status = %d, want %d", action, rec.Code, http.StatusConflict)
+		}
+	}
+	app.assertPlace(t, queued, service.PlaceQueue)
 }
 
 func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {

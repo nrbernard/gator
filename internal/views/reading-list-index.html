@@ -8,24 +8,7 @@
         {{ template "posts-search" . }}
         {{ template "search-results" . }}
 
-        {{ if .Posts }}
-          <ul class="post-list">
-            {{ range .Posts }}
-              <li class="post-row">
-                <div class="min-w-0 flex-1">
-                  <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time>{{ if .IsRead }} · Read{{ end }}</p>
-                  <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
-                </div>
-              </li>
-            {{ end }}
-          </ul>
-        {{ else }}
-          <div class="empty-state">
-            <div class="empty-state-icon">{{ template "icon-book-open" "size-5" }}</div>
-            <h2 class="mt-5 text-xl font-semibold">Nothing on the Reading list</h2>
-            <p class="mt-1.5 text-sm text-white/60">Keep Posts from the <a href="/" class="text-link">Queue</a> to read them here.</p>
-          </div>
-        {{ end }}
+        {{ template "reading-list" .Posts }}
       </main>
     </div>
   </body>

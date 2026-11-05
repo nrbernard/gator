@@ -1,0 +1,45 @@
+{{/* The Reading list: unread Posts first, then most recently kept. Each
+     per-Post action responds with this block for htmx to swap in place. */}}
+{{ block "reading-list" . }}
+<section id="reading-list">
+  {{ if . }}
+    <ul class="post-list">
+      {{ range . }}
+        {{ template "reading-list-item" . }}
+      {{ end }}
+    </ul>
+  {{ else }}
+    <div class="empty-state">
+      <div class="empty-state-icon">{{ template "icon-book-open" "size-5" }}</div>
+      <h2 class="mt-5 text-xl font-semibold">Nothing on the Reading list</h2>
+      <p class="mt-1.5 text-sm text-white/60">Keep Posts from the <a href="/" class="text-link">Queue</a> to read them here.</p>
+    </div>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ block "reading-list-item" . }}
+<li id="post-{{ .ID }}" class="post-row{{ if .IsRead }} post-row-read{{ end }}">
+  <div class="min-w-0 flex-1">
+    <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time>{{ if .IsRead }} · Read{{ end }}</p>
+    {{/* Open: the link opens the Post in a new tab, and the click bubbles to
+         the span, which marks it Read. */}}
+    <span hx-post="/reading-list/{{ .ID }}/open" hx-trigger="click" hx-target="#reading-list" hx-swap="outerHTML">
+      <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+    </span>
+    {{ template "reading-list-actions" . }}
+  </div>
+</li>
+{{ end }}
+
+{{/* One button per move from the Reading list. */}}
+{{ block "reading-list-actions" . }}
+<div class="row-actions">
+  <button hx-post="/reading-list/{{ .ID }}/read" hx-target="#reading-list" hx-swap="outerHTML" class="row-action">
+    {{ if .IsRead }}{{ template "icon-circle" "size-3.5" }}<span>Mark unread</span>{{ else }}{{ template "icon-circle-check" "size-3.5" }}<span>Mark read</span>{{ end }}
+  </button>
+  <button hx-post="/reading-list/{{ .ID }}/trash" hx-target="#reading-list" hx-swap="outerHTML" class="row-action row-action-danger">
+    {{ template "icon-trash-2" "size-3.5" }}<span>Trash</span>
+  </button>
+</div>
+{{ end }}
