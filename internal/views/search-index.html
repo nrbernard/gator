@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>{{ template "head" "Search" }}</head>
+  <body class="app">
+    <div class="shell shell-wide">
+      {{ template "header" "Search" }}
+      <main class="pb-12 pt-2">
+        {{ template "posts-search" . }}
+        {{ template "search-results" . }}
+      </main>
+    </div>
+  </body>
+</html>

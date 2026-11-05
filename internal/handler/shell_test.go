@@ -13,7 +13,7 @@ import (
 )
 
 // pages are the app's full pages, which share the shell: header, assets, type.
-var pages = []string{"/", "/reading-list", "/archive", "/trash", "/feeds"}
+var pages = []string{"/", "/reading-list", "/archive", "/trash", "/search", "/feeds"}
 
 var headerPattern = regexp.MustCompile(`(?s)<header\b.*?</header>`)
 

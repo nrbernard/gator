@@ -7,6 +7,8 @@
         type="search"
         name="search"
         placeholder="Search posts"
+        value="{{ .Query }}"
+        autofocus
         hx-post="/search"
         hx-trigger="input changed delay:250ms, keyup[key=='Enter']"
         hx-target="#search-results"
@@ -19,23 +21,72 @@
   </div>
 {{ end }}
 
-{{/* Search matches Posts in every Place; results have no actions yet. */}}
+{{/* Search matches Posts in every Place. Each result is labelled with its
+     Place and offers that Place's actions. */}}
 {{ block "search-results" . }}
 <div id="search-results">
   {{ if .Query }}
     <ul class="post-list mb-8">
       {{ range .Posts }}
-        <li class="post-row">
-          <div class="min-w-0 flex-1">
-            <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time></p>
-            <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
-            {{ if .Description }}<p class="mt-1 line-clamp-2 text-sm text-white/60">{{ .Description }}</p>{{ end }}
-          </div>
-        </li>
+        {{ template "search-result" . }}
       {{ else }}
         <li class="py-8 text-center text-sm text-white/60">No posts found for "{{ .Query }}".</li>
       {{ end }}
     </ul>
+  {{ end }}
+</div>
+{{ end }}
+
+{{/* One search result. An action on it responds with this block, re-rendered
+     with the Post's new Place, for htmx to swap in place. */}}
+{{ block "search-result" . }}
+<li id="search-result-{{ .ID }}" class="post-row{{ if .IsRead }} post-row-read{{ end }}">
+  <div class="min-w-0 flex-1">
+    <p class="post-meta"><span class="place-label">{{ .Place.Label }}</span> <span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time>{{ if .IsRead }} · Read{{ end }}</p>
+    {{ if or (eq .Place "queue") (eq .Place "reading_list") }}
+      {{/* Open: the link opens the Post in a new tab, and the click bubbles to
+           the span, which Keeps it marked Read, or marks it Read. */}}
+      <span hx-post="/search/{{ .ID }}/open" hx-trigger="click" hx-target="#search-result-{{ .ID }}" hx-swap="outerHTML">
+        <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+      </span>
+    {{ else }}
+      <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+    {{ end }}
+    {{ if .Description }}<p class="mt-1 line-clamp-2 text-sm text-white/60">{{ .Description }}</p>{{ end }}
+    {{ template "search-result-actions" . }}
+  </div>
+</li>
+{{ end }}
+
+{{/* The result's Place's actions, each swapping the result in place. Trash
+     sends the Place the result shows, so a stale result can't trash a Post
+     that has since moved. */}}
+{{ block "search-result-actions" . }}
+<div class="row-actions" hx-target="#search-result-{{ .ID }}" hx-swap="outerHTML">
+  {{ if eq .Place "queue" }}
+    <button hx-post="/search/{{ .ID }}/keep" class="row-action">
+      {{ template "icon-check" "size-3.5" }}<span>Keep</span>
+    </button>
+  {{ else if eq .Place "reading_list" }}
+    <button hx-post="/search/{{ .ID }}/read" class="row-action">
+      {{ if .IsRead }}{{ template "icon-circle" "size-3.5" }}<span>Mark unread</span>{{ else }}{{ template "icon-circle-check" "size-3.5" }}<span>Mark read</span>{{ end }}
+    </button>
+    <button hx-post="/search/{{ .ID }}/archive" class="row-action">
+      {{ template "icon-archive" "size-3.5" }}<span>Archive</span>
+    </button>
+  {{ else if eq .Place "archive" }}
+    <button hx-post="/search/{{ .ID }}/unarchive" class="row-action">
+      {{ template "icon-archive-restore" "size-3.5" }}<span>Move to Reading list</span>
+    </button>
+  {{ else if eq .Place "trash" }}
+    <button hx-post="/search/{{ .ID }}/restore" class="row-action">
+      {{ template "icon-undo-2" "size-3.5" }}<span>Restore</span>
+    </button>
+  {{ end }}
+  {{ if ne .Place "trash" }}
+    <button hx-post="/search/{{ .ID }}/trash" hx-vals='{"from": "{{ .Place }}"}' class="row-action row-action-danger">
+      {{ template "icon-trash-2" "size-3.5" }}<span>Trash</span>
+    </button>
   {{ end }}
 </div>
 {{ end }}

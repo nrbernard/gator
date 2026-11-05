@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -97,7 +98,7 @@ func newTestApp(t *testing.T) *testApp {
 		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
 		Archive:     &ArchiveHandler{PostService: posts, StateService: app.states},
 		Trash:       &TrashHandler{PostService: posts, StateService: app.states},
-		Post:        &PostHandler{PostService: posts},
+		Post:        &PostHandler{PostService: posts, StateService: app.states},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
 		StaticDir:   "../../static",
 	})
@@ -746,24 +747,181 @@ func TestNav_LinksToTheArchiveFromEveryScreen(t *testing.T) {
 	}
 }
 
-func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {
+func TestSearch_HasItsOwnPageLinkedFromEveryScreen(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, target := range []string{"/", "/reading-list", "/archive", "/trash", "/search"} {
+		body := app.request(t, http.MethodGet, target, nil).Body.String()
+		assertContains(t, body, `href="/search"`)
+	}
+
+	page := app.request(t, http.MethodGet, "/search", nil).Body.String()
+	assertContains(t, page, "<html", `name="search"`, `hx-post="/search"`, `id="search-results"`)
+	readingList := app.request(t, http.MethodGet, "/reading-list", nil).Body.String()
+	assertNotContains(t, readingList, `hx-post="/search"`, `id="search-results"`)
+}
+
+// searchResult is the markup of one search result, from its opening tag to its
+// close, failing the test if the response has no result for the Post.
+func searchResult(t *testing.T, body string, postID uuid.UUID) string {
+	t.Helper()
+	start := strings.Index(body, `id="search-result-`+postID.String()+`"`)
+	if start < 0 {
+		t.Fatalf("no search result for %s; body:\n%s", postID, body)
+	}
+	end := strings.Index(body[start:], "</li>")
+	if end < 0 {
+		t.Fatalf("search result for %s is not closed; body:\n%s", postID, body)
+	}
+	return body[start : start+end]
+}
+
+func TestSearch_FindsPostsInEveryPlaceLabelledWithTheirPlace(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
-	app.post(t, "Needle in the title", "", time.Now())
+	queued := app.post(t, "Needle in the title", "", time.Now())
 	kept := app.post(t, "Kept post", "a needle in the description", time.Now())
+	archived := app.post(t, "Archived needle", "", time.Now())
 	trashed := app.post(t, "Trashed needle", "", time.Now())
 	app.post(t, "Haystack", "", time.Now())
 	if err := app.states.Keep(ctx, app.userID, kept); err != nil {
 		t.Fatalf("Keep: %v", err)
 	}
+	app.archive(t, archived)
 	if err := app.states.Trash(ctx, app.userID, trashed, service.PlaceQueue); err != nil {
 		t.Fatalf("Trash: %v", err)
 	}
 
 	body := app.request(t, http.MethodPost, "/search", strings.NewReader("search=needle")).Body.String()
 
-	assertContains(t, body, "Needle in the title", "Kept post", "Trashed needle")
-	assertNotContains(t, body, "Haystack", "<button", "/saved-posts/", "/read-posts/")
+	assertNotContains(t, body, "Haystack")
+	for _, tc := range []struct {
+		id    uuid.UUID
+		title string
+		place string
+	}{
+		{queued, "Needle in the title", "Queue"},
+		{kept, "Kept post", "Reading list"},
+		{archived, "Archived needle", "Archive"},
+		{trashed, "Trashed needle", "Trash"},
+	} {
+		assertContains(t, searchResult(t, body, tc.id), tc.title, `class="place-label">`+tc.place+"<")
+	}
+}
+
+// putIn moves a new Queue Post to place, trashing it from the Queue.
+func (a *testApp) putIn(t *testing.T, postID uuid.UUID, place service.Place) {
+	t.Helper()
+	ctx := context.Background()
+	var err error
+	switch place {
+	case service.PlaceQueue:
+	case service.PlaceReadingList:
+		err = a.states.Keep(ctx, a.userID, postID)
+	case service.PlaceArchive:
+		a.archive(t, postID)
+	case service.PlaceTrash:
+		err = a.states.Trash(ctx, a.userID, postID, service.PlaceQueue)
+	}
+	if err != nil {
+		t.Fatalf("put post in %s: %v", place, err)
+	}
+}
+
+func TestSearch_EachResultOffersItsPlacesActionsOnTheResult(t *testing.T) {
+	all := []string{"keep", "open", "read", "archive", "unarchive", "trash", "restore"}
+	tests := []struct {
+		place   service.Place
+		actions []string
+	}{
+		{service.PlaceQueue, []string{"keep", "open", "trash"}},
+		{service.PlaceReadingList, []string{"open", "read", "archive", "trash"}},
+		{service.PlaceArchive, []string{"unarchive", "trash"}},
+		{service.PlaceTrash, []string{"restore"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(string(tc.place), func(t *testing.T) {
+			app := newTestApp(t)
+			id := app.post(t, "Needle", "", time.Now())
+			app.putIn(t, id, tc.place)
+
+			body := app.request(t, http.MethodPost, "/search", strings.NewReader("search=needle")).Body.String()
+
+			result := searchResult(t, body, id)
+			assertContains(t, result, `hx-target="#search-result-`+id.String()+`"`)
+			for _, action := range all {
+				route := `hx-post="/search/` + id.String() + `/` + action + `"`
+				if slices.Contains(tc.actions, action) {
+					assertContains(t, result, route)
+				} else {
+					assertNotContains(t, result, route)
+				}
+			}
+			if slices.Contains(tc.actions, "trash") {
+				assertContains(t, result, `"from": "`+string(tc.place)+`"`)
+			}
+		})
+	}
+}
+
+func TestSearch_TrashFromAResultNoLongerInItsPlaceIsRejected(t *testing.T) {
+	app := newTestApp(t)
+	id := app.post(t, "Needle", "", time.Now())
+	app.putIn(t, id, service.PlaceReadingList)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/search/"+id.String()+"/trash", strings.NewReader("from=queue"))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+	app.e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+	app.assertPlace(t, id, service.PlaceReadingList)
+}
+
+func TestSearch_AnActionMovesThePostAndUpdatesTheResultInPlace(t *testing.T) {
+	tests := []struct {
+		from      service.Place
+		action    string
+		want      service.PostState
+		wantLabel string
+	}{
+		{service.PlaceQueue, "keep", service.PostState{Place: service.PlaceReadingList}, "Reading list"},
+		{service.PlaceQueue, "open", service.PostState{Place: service.PlaceReadingList, Read: true}, "Reading list"},
+		{service.PlaceQueue, "trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceQueue}, "Trash"},
+		{service.PlaceReadingList, "open", service.PostState{Place: service.PlaceReadingList, Read: true}, "Reading list"},
+		{service.PlaceReadingList, "read", service.PostState{Place: service.PlaceReadingList, Read: true}, "Reading list"},
+		{service.PlaceReadingList, "archive", service.PostState{Place: service.PlaceArchive}, "Archive"},
+		{service.PlaceReadingList, "trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceReadingList}, "Trash"},
+		{service.PlaceArchive, "unarchive", service.PostState{Place: service.PlaceReadingList}, "Reading list"},
+		{service.PlaceArchive, "trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceArchive}, "Trash"},
+		{service.PlaceTrash, "restore", service.PostState{Place: service.PlaceQueue}, "Queue"},
+	}
+
+	for _, tc := range tests {
+		t.Run(string(tc.from)+"/"+tc.action, func(t *testing.T) {
+			app := newTestApp(t)
+			ctx := context.Background()
+			app.post(t, "Other needle", "", time.Now())
+			acted := app.post(t, "Acted-on needle", "", time.Now())
+			app.putIn(t, acted, tc.from)
+
+			body := app.request(t, http.MethodPost, "/search/"+acted.String()+"/"+tc.action,
+				strings.NewReader("from="+string(tc.from))).Body.String()
+
+			got, err := app.states.State(ctx, app.userID, acted)
+			if err != nil {
+				t.Fatalf("State: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("state = %+v, want %+v", got, tc.want)
+			}
+			assertContains(t, searchResult(t, body, acted), "Acted-on needle", `class="place-label">`+tc.wantLabel+"<")
+			assertNotContains(t, body, "<html", "Other needle", `id="search-results"`)
+		})
+	}
 }
 
 // serveFeed follows a Feed served with one item, "Freshly fetched", and

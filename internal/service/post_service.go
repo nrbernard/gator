@@ -146,30 +146,74 @@ func (s *PostService) Trash(ctx context.Context, userID uuid.UUID) ([]models.Pos
 	return posts, nil
 }
 
+// SearchResult is a Post found by search, with the Place it is in.
+type SearchResult struct {
+	models.Post
+	Place Place
+}
+
 // SearchPosts returns the newest 100 Posts, in any Place, whose title or
 // description contains query.
-func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query string) ([]models.Post, error) {
-	dbPosts, err := s.Repo.SearchPostsByUser(ctx, database.SearchPostsByUserParams{
+func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query string) ([]SearchResult, error) {
+	rows, err := s.Repo.SearchPostsByUser(ctx, database.SearchPostsByUserParams{
 		UserID:     userID.String(),
 		SearchText: query,
 		LimitCount: 100,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("search posts: %w", err)
 	}
 
-	posts := make([]models.Post, 0, len(dbPosts))
-	for _, dbPost := range dbPosts {
-		posts = append(posts, models.Post{
-			ID:          uuid.MustParse(dbPost.ID),
-			Title:       dbPost.Title,
-			Link:        dbPost.Url,
-			Description: dbPost.Description.String,
-			PublishedAt: dbPost.PublishedAt,
-			FeedID:      uuid.MustParse(dbPost.FeedID),
-			FeedName:    dbPost.FeedName,
+	results := make([]SearchResult, 0, len(rows))
+	for _, row := range rows {
+		results = append(results, SearchResult{
+			Post: models.Post{
+				ID:          uuid.MustParse(row.ID),
+				Title:       row.Title,
+				Link:        row.Url,
+				Description: row.Description.String,
+				PublishedAt: row.PublishedAt,
+				FeedID:      uuid.MustParse(row.FeedID),
+				FeedName:    row.FeedName,
+				IsRead:      row.ReadAt.Valid,
+			},
+			Place: placeOf(row.Place),
 		})
 	}
+	return results, nil
+}
 
-	return posts, nil
+// SearchResult returns one Post as search shows it, with its current Place.
+func (s *PostService) SearchResult(ctx context.Context, userID, postID uuid.UUID) (SearchResult, error) {
+	row, err := s.Repo.GetSearchResult(ctx, database.GetSearchResultParams{
+		UserID: userID.String(),
+		PostID: postID.String(),
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return SearchResult{}, fmt.Errorf("%w: %s", ErrPostNotFound, postID)
+	}
+	if err != nil {
+		return SearchResult{}, fmt.Errorf("get search result: %w", err)
+	}
+	return SearchResult{
+		Post: models.Post{
+			ID:          uuid.MustParse(row.ID),
+			Title:       row.Title,
+			Link:        row.Url,
+			Description: row.Description.String,
+			PublishedAt: row.PublishedAt,
+			FeedID:      uuid.MustParse(row.FeedID),
+			FeedName:    row.FeedName,
+			IsRead:      row.ReadAt.Valid,
+		},
+		Place: placeOf(row.Place),
+	}, nil
+}
+
+// placeOf is the Place a post_states place column records: NULL is the Queue.
+func placeOf(place sql.NullString) Place {
+	if !place.Valid {
+		return PlaceQueue
+	}
+	return Place(place.String)
 }
