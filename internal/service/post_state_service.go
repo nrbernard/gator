@@ -72,6 +72,22 @@ func (s *PostStateService) Trash(ctx context.Context, userID, postID uuid.UUID, 
 	})
 }
 
+// Open records that the user opened the Post: it Keeps a Queue Post and marks
+// it Read, and marks a Reading list Post Read, leaving it on the Reading list.
+func (s *PostStateService) Open(ctx context.Context, userID, postID uuid.UUID) error {
+	return s.move(ctx, userID, postID, "open", []Place{PlaceQueue, PlaceReadingList}, func(PostState) PostState {
+		return PostState{Place: PlaceReadingList, Read: true}
+	})
+}
+
+// ToggleRead marks a Reading list Post Read, or clears its Read mark, so an
+// accidental Open is easy to undo.
+func (s *PostStateService) ToggleRead(ctx context.Context, userID, postID uuid.UUID) error {
+	return s.move(ctx, userID, postID, "toggle read", []Place{PlaceReadingList}, func(current PostState) PostState {
+		return PostState{Place: PlaceReadingList, Read: !current.Read}
+	})
+}
+
 // move applies to to the Post's current state, provided the Post is in one of
 // the from Places. The Read mark's original time survives a move that keeps it.
 func (s *PostStateService) move(ctx context.Context, userID, postID uuid.UUID, name string, from []Place, to func(PostState) PostState) error {
@@ -85,12 +101,14 @@ func (s *PostStateService) move(ctx context.Context, userID, postID uuid.UUID, n
 	}
 	next := to(current)
 
+	// UTC, so stored times sort as text alongside SQLite's CURRENT_TIMESTAMP.
+	now := time.Now().UTC()
 	readAt := row.ReadAt
 	switch {
 	case !next.Read:
 		readAt = sql.NullTime{}
 	case !readAt.Valid:
-		readAt = sql.NullTime{Time: time.Now(), Valid: true}
+		readAt = sql.NullTime{Time: now, Valid: true}
 	}
 
 	return s.Repo.SetPostState(ctx, database.SetPostStateParams{
@@ -99,6 +117,7 @@ func (s *PostStateService) move(ctx context.Context, userID, postID uuid.UUID, n
 		Place:       string(next.Place),
 		TrashedFrom: sql.NullString{String: string(next.TrashedFrom), Valid: next.TrashedFrom != ""},
 		ReadAt:      readAt,
+		ChangedAt:   now,
 	})
 }
 

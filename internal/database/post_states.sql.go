@@ -99,7 +99,7 @@ FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id
 WHERE post_states.user_id = ?1 AND post_states.place = 'reading_list'
-ORDER BY post_states.changed_at DESC
+ORDER BY post_states.read_at IS NOT NULL, post_states.changed_at DESC
 `
 
 type GetReadingListPostsRow struct {
@@ -113,6 +113,8 @@ type GetReadingListPostsRow struct {
 	ReadAt      sql.NullTime
 }
 
+// Unread first, then most recently kept: changed_at is when the Post entered
+// the Reading list.
 func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]GetReadingListPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getReadingListPosts, userID)
 	if err != nil {
@@ -147,12 +149,12 @@ func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]Get
 
 const setPostState = `-- name: SetPostState :exec
 INSERT INTO post_states (user_id, post_id, place, trashed_from, read_at, changed_at)
-VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT (user_id, post_id) DO UPDATE SET
     place = excluded.place,
     trashed_from = excluded.trashed_from,
     read_at = excluded.read_at,
-    changed_at = excluded.changed_at
+    changed_at = CASE WHEN post_states.place = excluded.place THEN post_states.changed_at ELSE excluded.changed_at END
 `
 
 type SetPostStateParams struct {
@@ -161,8 +163,11 @@ type SetPostStateParams struct {
 	Place       string
 	TrashedFrom sql.NullString
 	ReadAt      sql.NullTime
+	ChangedAt   time.Time
 }
 
+// changed_at is when the Post entered its Place, so a change to the Read mark
+// alone keeps it.
 func (q *Queries) SetPostState(ctx context.Context, arg SetPostStateParams) error {
 	_, err := q.db.ExecContext(ctx, setPostState,
 		arg.UserID,
@@ -170,6 +175,7 @@ func (q *Queries) SetPostState(ctx context.Context, arg SetPostStateParams) erro
 		arg.Place,
 		arg.TrashedFrom,
 		arg.ReadAt,
+		arg.ChangedAt,
 	)
 	return err
 }

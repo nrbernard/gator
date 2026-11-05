@@ -109,6 +109,54 @@ func TestPostStateService_TrashMovesAReadingListPostToTheTrashFromTheReadingList
 	assertState(t, s, f.userID, postID, PostState{Place: PlaceTrash, TrashedFrom: PlaceReadingList})
 }
 
+func TestPostStateService_OpenMarksAReadingListPostReadAndLeavesItThere(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Reading this now", time.Now())
+	if err := s.Keep(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	if err := s.Open(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList, Read: true})
+}
+
+func TestPostStateService_OpenKeepsAQueuePostAndMarksItRead(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	postID := f.post(t, "Clicked through", time.Now())
+
+	if err := s.Open(context.Background(), f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList, Read: true})
+}
+
+func TestPostStateService_ToggleReadFlipsTheMarkOnAReadingListPost(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Opened by accident", time.Now())
+	if err := s.Keep(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	if err := s.ToggleRead(ctx, f.userID, postID); err != nil {
+		t.Fatalf("ToggleRead: %v", err)
+	}
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList, Read: true})
+
+	if err := s.ToggleRead(ctx, f.userID, postID); err != nil {
+		t.Fatalf("ToggleRead: %v", err)
+	}
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList})
+}
+
 func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	type move func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error
 	keep := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
@@ -118,6 +166,12 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 		return func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
 			return s.Trash(ctx, userID, postID, from)
 		}
+	}
+	open := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Open(ctx, userID, postID)
+	}
+	toggleRead := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.ToggleRead(ctx, userID, postID)
 	}
 	trashed := PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue}
 
@@ -132,6 +186,9 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 		{"trash a trashed post", []move{trashFrom(PlaceQueue)}, trashFrom(PlaceTrash), trashed},
 		{"trash a Reading list post seen in the Queue", []move{keep}, trashFrom(PlaceQueue), PostState{Place: PlaceReadingList}},
 		{"trash a Queue post seen on the Reading list", nil, trashFrom(PlaceReadingList), PostState{Place: PlaceQueue}},
+		{"open a trashed post", []move{trashFrom(PlaceQueue)}, open, trashed},
+		{"toggle read on a Queue post", nil, toggleRead, PostState{Place: PlaceQueue}},
+		{"toggle read on a trashed post", []move{trashFrom(PlaceQueue)}, toggleRead, trashed},
 	}
 
 	for _, tc := range tests {
