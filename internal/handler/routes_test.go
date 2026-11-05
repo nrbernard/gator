@@ -95,6 +95,7 @@ func newTestApp(t *testing.T) *testApp {
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
 		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
 		Archive:     &ArchiveHandler{PostService: posts, StateService: app.states},
+		Trash:       &TrashHandler{PostService: posts, StateService: app.states},
 		Post:        &PostHandler{PostService: posts},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
 	})
@@ -558,6 +559,92 @@ func TestArchive_RejectsActionsOnAPostNotInTheArchive(t *testing.T) {
 		}
 	}
 	app.assertPlace(t, kept, service.PlaceReadingList)
+}
+
+func TestTrash_ListsTrashedPostsMostRecentlyTrashedFirst(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	now := time.Now()
+	// Published order is the reverse of trashed order, so the test tells them apart.
+	first := app.post(t, "Trashed first", "", now)
+	second := app.post(t, "Trashed second", "", now.Add(-1*time.Hour))
+	app.post(t, "Queue post", "", now)
+	if err := app.states.Trash(ctx, app.userID, first, service.PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	app.archive(t, second)
+	if err := app.states.Trash(ctx, app.userID, second, service.PlaceArchive); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+
+	assertContains(t, body, `id="trash"`, "Trashed first", "Trashed second", "Example Feed",
+		"http://example.com/posts/"+first.String())
+	assertNotContains(t, body, "Queue post")
+	if strings.Index(body, "Trashed second") > strings.Index(body, "Trashed first") {
+		t.Errorf("Trashed first is listed before Trashed second; want most recently trashed first")
+	}
+}
+
+func TestTrash_EachPostOffersRestoreOverHtmx(t *testing.T) {
+	app := newTestApp(t)
+	trashed := app.post(t, "Trashed post", "", time.Now())
+	if err := app.states.Trash(context.Background(), app.userID, trashed, service.PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+
+	assertContains(t, body, "htmx", `hx-post="/trash/`+trashed.String()+`/restore"`, ">Restore<")
+}
+
+func TestTrash_RestoreReturnsThePostAndUpdatesTheListInPlace(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	other := app.post(t, "Other trashed post", "", time.Now())
+	acted := app.post(t, "Acted on", "", time.Now())
+	for _, id := range []uuid.UUID{other, acted} {
+		if err := app.states.Trash(ctx, app.userID, id, service.PlaceQueue); err != nil {
+			t.Fatalf("Trash: %v", err)
+		}
+	}
+
+	body := app.request(t, http.MethodPost, "/trash/"+acted.String()+"/restore", nil).Body.String()
+
+	app.assertPlace(t, acted, service.PlaceQueue)
+	assertContains(t, body, `id="trash"`, "Other trashed post")
+	assertNotContains(t, body, "<html", "Acted on")
+}
+
+func TestTrash_EmptyTrashSaysSo(t *testing.T) {
+	app := newTestApp(t)
+
+	body := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+
+	assertContains(t, body, "Nothing in the Trash")
+}
+
+func TestTrash_RejectsRestoreOfAPostNotInTheTrash(t *testing.T) {
+	app := newTestApp(t)
+	queued := app.post(t, "Queue post", "", time.Now())
+
+	rec := httptest.NewRecorder()
+	app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/trash/"+queued.String()+"/restore", nil))
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+	app.assertPlace(t, queued, service.PlaceQueue)
+}
+
+func TestNav_LinksToTheTrashFromEveryScreen(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, target := range []string{"/", "/reading-list", "/archive", "/trash"} {
+		body := app.request(t, http.MethodGet, target, nil).Body.String()
+		assertContains(t, body, `href="/trash"`)
+	}
 }
 
 func TestNav_LinksToTheArchiveFromEveryScreen(t *testing.T) {

@@ -11,6 +11,7 @@ type Handlers struct {
 	Queue       *QueueHandler
 	ReadingList *ReadingListHandler
 	Archive     *ArchiveHandler
+	Trash       *TrashHandler
 	Post        *PostHandler
 	Feed        *FeedHandler
 }
@@ -38,6 +39,9 @@ func Register(e *echo.Echo, h Handlers) {
 	e.GET("/archive", h.Archive.Index)
 	e.POST("/archive/:id/unarchive", h.Archive.Unarchive)
 	e.POST("/archive/:id/trash", h.Archive.Trash)
+
+	e.GET("/trash", h.Trash.Index)
+	e.POST("/trash/:id/restore", h.Trash.Restore)
 
 	e.POST("/search", h.Post.Search)
 
