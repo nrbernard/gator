@@ -307,6 +307,26 @@ func TestQueue_TrashAllWithoutACutoffTrashesNothing(t *testing.T) {
 	app.assertPlace(t, post, service.PlaceQueue)
 }
 
+func TestQueue_EmptyQueueSaysCaughtUpWithTheLastFetchTime(t *testing.T) {
+	app := newTestApp(t)
+	if _, err := app.db.Exec("UPDATE feeds SET last_fetched_at = ? WHERE id = ?", "2026-11-04 09:30:00", app.feedID.String()); err != nil {
+		t.Fatalf("set last_fetched_at: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	assertContains(t, body, "caught up", `datetime="2026-11-04T09:30:00Z"`, "November 4, 2026 09:30", `href="/reading-list"`)
+	assertNotContains(t, body, "Trash all")
+}
+
+func TestQueue_EmptyQueueBeforeAnyFetchSaysSo(t *testing.T) {
+	app := newTestApp(t)
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	assertContains(t, body, "caught up", "not fetched any Feeds yet")
+}
+
 func TestQueue_TriagingTheLastPostRespondsWithAnEmptyQueue(t *testing.T) {
 	app := newTestApp(t)
 	last := app.post(t, "Last post", "", time.Now())
@@ -314,7 +334,7 @@ func TestQueue_TriagingTheLastPostRespondsWithAnEmptyQueue(t *testing.T) {
 	body := app.request(t, http.MethodPost, "/queue/"+last.String()+"/keep", nil).Body.String()
 
 	app.assertPlace(t, last, service.PlaceReadingList)
-	assertContains(t, body, "The Queue is empty", `href="/reading-list"`)
+	assertContains(t, body, "caught up", `href="/reading-list"`)
 	assertNotContains(t, body, "Last post")
 }
 

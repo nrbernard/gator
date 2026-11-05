@@ -47,6 +47,23 @@ func (q *Queries) CountQueuePostsCreatedBy(ctx context.Context, arg CountQueuePo
 	return count, err
 }
 
+const getLastFetchedAt = `-- name: GetLastFetchedAt :one
+SELECT feeds.last_fetched_at
+FROM feeds
+WHERE feeds.id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND feeds.last_fetched_at IS NOT NULL
+ORDER BY feeds.last_fetched_at DESC
+LIMIT 1
+`
+
+// When gator last fetched any of the user's Feeds, for the empty Queue.
+func (q *Queries) GetLastFetchedAt(ctx context.Context, userID string) (sql.NullTime, error) {
+	row := q.db.QueryRowContext(ctx, getLastFetchedAt, userID)
+	var last_fetched_at sql.NullTime
+	err := row.Scan(&last_fetched_at)
+	return last_fetched_at, err
+}
+
 const getNextQueuePost = `-- name: GetNextQueuePost :one
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name
 FROM posts

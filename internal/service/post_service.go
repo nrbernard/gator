@@ -16,7 +16,8 @@ type PostService struct {
 	Repo *database.Queries
 }
 
-// Queue returns the newest Post in the user's Queue and the Queue's size.
+// Queue returns the newest Post in the user's Queue and the Queue's size or,
+// if the Queue is empty, when gator last fetched the user's Feeds.
 func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue, error) {
 	count, err := s.Repo.CountQueuePosts(ctx, userID.String())
 	if err != nil {
@@ -26,6 +27,14 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue
 
 	row, err := s.Repo.GetNextQueuePost(ctx, userID.String())
 	if errors.Is(err, sql.ErrNoRows) {
+		fetched, err := s.Repo.GetLastFetchedAt(ctx, userID.String())
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return models.Queue{}, fmt.Errorf("get last fetch: %w", err)
+		case fetched.Valid:
+			queue.LastFetchedAt = &fetched.Time
+		}
 		return queue, nil
 	}
 	if err != nil {

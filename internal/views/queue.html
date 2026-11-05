@@ -46,7 +46,15 @@
         class="flex-1 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600">Keep</button>
     </div>
   {{ else }}
-    <p class="text-gray-600 py-8">The Queue is empty. <a href="/reading-list" class="text-blue-600 hover:text-blue-800">Go to the Reading list</a></p>
+    <div class="py-8 text-gray-600">
+      <p class="text-gray-900 mb-2">You're caught up.</p>
+      {{ with .LastFetchedAt }}
+        <p class="text-sm mb-4">Last fetched <time datetime="{{ .UTC.Format "2006-01-02T15:04:05Z07:00" }}">{{ .UTC.Format "January 2, 2006 15:04" }} UTC</time></p>
+      {{ else }}
+        <p class="text-sm mb-4">gator has not fetched any Feeds yet.</p>
+      {{ end }}
+      <a href="/reading-list" class="text-blue-600 hover:text-blue-800">Go to the Reading list</a>
+    </div>
   {{ end }}
 </section>
 {{ end }}

@@ -21,6 +21,15 @@ FROM posts
 WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id);
 
+-- name: GetLastFetchedAt :one
+-- When gator last fetched any of the user's Feeds, for the empty Queue.
+SELECT feeds.last_fetched_at
+FROM feeds
+WHERE feeds.id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND feeds.last_fetched_at IS NOT NULL
+ORDER BY feeds.last_fetched_at DESC
+LIMIT 1;
+
 -- name: CountQueuePostsCreatedBy :one
 -- The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
 -- datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.

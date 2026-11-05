@@ -25,6 +25,9 @@ type Queue struct {
 	// Cutoff is the moment the Queue page loaded. The page sends it with each
 	// Queue request, and trash all spares Posts fetched after it.
 	Cutoff time.Time
+	// LastFetchedAt is when gator last fetched any of the user's Feeds, set
+	// for an empty Queue; nil if it never has.
+	LastFetchedAt *time.Time
 }
 
 // CutoffParam formats the cutoff for the page to send back.
