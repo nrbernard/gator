@@ -282,6 +282,30 @@ func TestFeedService_ScrapeFeeds_RateLimitedFeedIsSkippedWithoutError(t *testing
 	}
 }
 
+func TestFeedService_ScrapeFeeds_NotModifiedCountsAsFetch(t *testing.T) {
+	queries := setupTestDB(t)
+	ctx := context.Background()
+	userID := createTestUser(t, queries)
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	t.Cleanup(server.Close)
+	createFollowedFeed(t, queries, userID, "Unchanged", server.URL)
+
+	svc := &FeedService{Repo: queries}
+	for range 2 {
+		if err := svc.ScrapeFeeds(ctx); err != nil {
+			t.Fatalf("ScrapeFeeds returned error: %v", err)
+		}
+	}
+
+	if hits != 1 {
+		t.Errorf("Expected a 304 Feed to be fetched once within the hour, got %d requests", hits)
+	}
+}
+
 func TestFeedService_ScrapeFeeds_PollingFrequency(t *testing.T) {
 	queries := setupTestDB(t)
 
