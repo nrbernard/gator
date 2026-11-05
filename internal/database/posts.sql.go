@@ -91,26 +91,19 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 }
 
 const searchPostsByUser = `-- name: SearchPostsByUser :many
-SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id, post_saves.created_at as saved_at, post_reads.created_at as read_at FROM posts
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
-LEFT JOIN post_saves ON posts.id = post_saves.post_id AND post_saves.user_id = ?1
-LEFT JOIN post_reads ON posts.id = post_reads.post_id AND post_reads.user_id = ?1
-WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = ?1) 
-AND ( CAST(?2 AS TEXT) = ''
-      OR posts.title LIKE '%' || CAST(?2 AS TEXT) || '%'
+WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND ( posts.title LIKE '%' || CAST(?2 AS TEXT) || '%'
       OR posts.description LIKE '%' || CAST(?2 AS TEXT) || '%'
     )
-AND ( CAST(?3 AS BOOLEAN) = false OR post_reads.id  IS NULL )
-AND ( CAST(?4 AS BOOLEAN)  = false OR post_saves.id IS NOT NULL )
-ORDER BY published_at DESC LIMIT ?5
+ORDER BY published_at DESC LIMIT ?3
 `
 
 type SearchPostsByUserParams struct {
-	UserID         string
-	SearchText     string
-	FilterByUnread bool
-	FilterBySaved  bool
-	LimitCount     int64
+	UserID     string
+	SearchText string
+	LimitCount int64
 }
 
 type SearchPostsByUserRow struct {
@@ -121,18 +114,10 @@ type SearchPostsByUserRow struct {
 	PublishedAt time.Time
 	FeedName    string
 	FeedID      string
-	SavedAt     sql.NullTime
-	ReadAt      sql.NullTime
 }
 
 func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchPostsByUser,
-		arg.UserID,
-		arg.SearchText,
-		arg.FilterByUnread,
-		arg.FilterBySaved,
-		arg.LimitCount,
-	)
+	rows, err := q.db.QueryContext(ctx, searchPostsByUser, arg.UserID, arg.SearchText, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +133,6 @@ func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserPa
 			&i.PublishedAt,
 			&i.FeedName,
 			&i.FeedID,
-			&i.SavedAt,
-			&i.ReadAt,
 		); err != nil {
 			return nil, err
 		}

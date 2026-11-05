@@ -1,6 +1,6 @@
 # gator
 
-A single-user RSS reader: follow feeds, read, save, and mark posts read in the browser. Go + Echo, SQLite, htmx, Tailwind.
+A single-user RSS reader built around triage: every new post lands in the Queue, and you Keep it for the Reading list or Trash it. Go + Echo, SQLite, htmx, Tailwind.
 
 ## Prerequisites
 

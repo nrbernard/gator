@@ -14,6 +14,12 @@ type Post struct {
 	PublishedAt time.Time
 	FeedID      uuid.UUID
 	FeedName    string
-	IsSaved     bool
 	IsRead      bool
+}
+
+// Queue is the top of the user's Queue: the Post to triage next, if any, and
+// how many Posts are in the Queue, that one included.
+type Queue struct {
+	Next  *Post
+	Count int
 }

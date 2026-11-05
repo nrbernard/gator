@@ -1,0 +1,40 @@
+{{ block "nav" . }}
+<header class="flex items-baseline justify-between mb-8">
+  <h1 class="text-3xl font-bold">
+    <a href="/" class="text-gray-900 hover:text-blue-600 transition-colors">Gator</a>
+  </h1>
+  <nav class="flex gap-4 text-blue-600">
+    <a href="/" class="hover:text-blue-800">Queue</a>
+    <a href="/reading-list" class="hover:text-blue-800">Reading list</a>
+    <a href="/feeds" class="hover:text-blue-800">Feeds</a>
+  </nav>
+</header>
+{{ end }}
+
+{{/* The top of the Queue: one Post with Keep and Trash, or the empty Queue.
+     Each triage action responds with this block for the next Post. */}}
+{{ block "queue" . }}
+<section id="queue" class="mb-8">
+  {{ with .Next }}
+    <p class="text-sm text-gray-600 mb-2">{{ $.Count }} left</p>
+    <article class="bg-white rounded border border-neutral-200 p-4 mb-4">
+      <div class="flex justify-between text-sm text-gray-600 mb-2">
+        <span>{{ .FeedName }}</span>
+        <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "January 2, 2006 15:04" }}</time>
+      </div>
+      <h3 class="text-xl font-semibold text-gray-900 mb-2">
+        <a href="{{ .Link }}" target="_blank" rel="noopener">{{ .Title }}</a>
+      </h3>
+      <p class="text-gray-700">{{ .Description }}</p>
+    </article>
+    <div class="flex gap-4">
+      <button hx-post="/queue/{{ .ID }}/trash" hx-target="#queue" hx-swap="outerHTML"
+        class="flex-1 px-4 py-2 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
+      <button hx-post="/queue/{{ .ID }}/keep" hx-target="#queue" hx-swap="outerHTML"
+        class="flex-1 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600">Keep</button>
+    </div>
+  {{ else }}
+    <p class="text-gray-600 py-8">The Queue is empty. <a href="/reading-list" class="text-blue-600 hover:text-blue-800">Go to the Reading list</a></p>
+  {{ end }}
+</section>
+{{ end }}

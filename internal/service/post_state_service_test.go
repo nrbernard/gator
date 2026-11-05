@@ -86,7 +86,7 @@ func TestPostStateService_TrashMovesAQueuePostToTheTrashFromTheQueue(t *testing.
 	s := &PostStateService{Repo: f.queries}
 	postID := f.post(t, "Not for me", time.Now())
 
-	if err := s.Trash(context.Background(), f.userID, postID); err != nil {
+	if err := s.Trash(context.Background(), f.userID, postID, PlaceQueue); err != nil {
 		t.Fatalf("Trash: %v", err)
 	}
 
@@ -102,7 +102,7 @@ func TestPostStateService_TrashMovesAReadingListPostToTheTrashFromTheReadingList
 		t.Fatalf("Keep: %v", err)
 	}
 
-	if err := s.Trash(ctx, f.userID, postID); err != nil {
+	if err := s.Trash(ctx, f.userID, postID, PlaceReadingList); err != nil {
 		t.Fatalf("Trash: %v", err)
 	}
 
@@ -110,15 +110,28 @@ func TestPostStateService_TrashMovesAReadingListPostToTheTrashFromTheReadingList
 }
 
 func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
+	type move func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error
+	keep := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Keep(ctx, userID, postID)
+	}
+	trashFrom := func(from Place) move {
+		return func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+			return s.Trash(ctx, userID, postID, from)
+		}
+	}
+	trashed := PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue}
+
 	tests := []struct {
 		name    string
-		prepare []string
-		move    string
+		prepare []move
+		move    move
 		want    PostState
 	}{
-		{"keep a Reading list post", []string{"keep"}, "keep", PostState{Place: PlaceReadingList}},
-		{"keep a trashed post", []string{"trash"}, "keep", PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue}},
-		{"trash a trashed post", []string{"trash"}, "trash", PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue}},
+		{"keep a Reading list post", []move{keep}, keep, PostState{Place: PlaceReadingList}},
+		{"keep a trashed post", []move{trashFrom(PlaceQueue)}, keep, trashed},
+		{"trash a trashed post", []move{trashFrom(PlaceQueue)}, trashFrom(PlaceTrash), trashed},
+		{"trash a Reading list post seen in the Queue", []move{keep}, trashFrom(PlaceQueue), PostState{Place: PlaceReadingList}},
+		{"trash a Queue post seen on the Reading list", nil, trashFrom(PlaceReadingList), PostState{Place: PlaceQueue}},
 	}
 
 	for _, tc := range tests {
@@ -127,14 +140,13 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 			s := &PostStateService{Repo: f.queries}
 			ctx := context.Background()
 			postID := f.post(t, "Post", time.Now())
-			moves := map[string]func(context.Context, uuid.UUID, uuid.UUID) error{"keep": s.Keep, "trash": s.Trash}
 			for _, m := range tc.prepare {
-				if err := moves[m](ctx, f.userID, postID); err != nil {
-					t.Fatalf("%s: %v", m, err)
+				if err := m(s, ctx, f.userID, postID); err != nil {
+					t.Fatalf("prepare: %v", err)
 				}
 			}
 
-			err := moves[tc.move](ctx, f.userID, postID)
+			err := tc.move(s, ctx, f.userID, postID)
 
 			if !errors.Is(err, ErrInvalidMove) {
 				t.Errorf("err = %v, want ErrInvalidMove", err)

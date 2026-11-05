@@ -53,16 +53,9 @@ func main() {
 	userService := &service.UserService{Repo: dbQueries}
 	postService := &service.PostService{Repo: dbQueries}
 	feedService := &service.FeedService{Repo: dbQueries}
-	savedPostService := &service.SavedPostService{Repo: dbQueries}
-	readPostService := &service.ReadPostService{Repo: dbQueries}
+	stateService := &service.PostStateService{Repo: dbQueries}
 
 	e.Use(middleware.CurrentUser(userService))
-
-	postHandler, err := handler.NewPostHandler(postService, userService, feedService)
-	if err != nil {
-		fmt.Printf("Failed to create post handler: %s\n", err)
-		os.Exit(1)
-	}
 
 	feedHandler, err := handler.NewFeedHandler(feedService, userService)
 	if err != nil {
@@ -70,36 +63,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	savedPostHandler, err := handler.NewSavedPostHandler(savedPostService, userService)
-	if err != nil {
-		fmt.Printf("Failed to create feed handler: %s\n", err)
-		os.Exit(1)
-	}
-
-	readPostHandler, err := handler.NewReadPostHandler(readPostService)
-	if err != nil {
-		fmt.Printf("Failed to create feed handler: %s\n", err)
-		os.Exit(1)
-	}
-
-	e.GET("/", func(c echo.Context) error {
-		return c.Redirect(301, "/posts")
+	handler.Register(e, handler.Handlers{
+		Queue:       &handler.QueueHandler{PostService: postService, StateService: stateService, FeedService: feedService},
+		ReadingList: &handler.ReadingListHandler{PostService: postService},
+		Post:        &handler.PostHandler{PostService: postService},
+		Feed:        feedHandler,
 	})
-
-	e.GET("/posts", postHandler.Index)
-
-	e.POST("/saved-posts/:id", savedPostHandler.Save)
-	e.DELETE("/saved-posts/:id", savedPostHandler.Delete)
-
-	e.POST("/read-posts/:id", readPostHandler.Save)
-
-	e.POST("/posts/refresh", postHandler.Refresh)
-
-	e.POST("/search", postHandler.Search)
-
-	e.GET("/feeds", feedHandler.Index)
-	e.POST("/feeds", feedHandler.Create)
-	e.DELETE("/feeds/:id", feedHandler.Delete)
 
 	if err := e.Start(":8080"); err != nil {
 		fmt.Printf("Server stopped: %s\n", err)

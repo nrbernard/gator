@@ -8,7 +8,58 @@ package database
 import (
 	"context"
 	"database/sql"
+	"time"
 )
+
+const countQueuePosts = `-- name: CountQueuePosts :one
+SELECT COUNT(*)
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+`
+
+func (q *Queries) CountQueuePosts(ctx context.Context, userID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuePosts, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getNextQueuePost = `-- name: GetNextQueuePost :one
+SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name
+FROM posts
+JOIN feeds ON feeds.id = posts.feed_id
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+ORDER BY posts.published_at DESC
+LIMIT 1
+`
+
+type GetNextQueuePostRow struct {
+	ID          string
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedID      string
+	FeedName    string
+}
+
+// The newest Post from a followed Feed that has no state: the top of the Queue.
+func (q *Queries) GetNextQueuePost(ctx context.Context, userID string) (GetNextQueuePostRow, error) {
+	row := q.db.QueryRowContext(ctx, getNextQueuePost, userID)
+	var i GetNextQueuePostRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Url,
+		&i.Description,
+		&i.PublishedAt,
+		&i.FeedID,
+		&i.FeedName,
+	)
+	return i, err
+}
 
 const getPostState = `-- name: GetPostState :one
 SELECT posts.id AS post_id, post_states.place, post_states.trashed_from, post_states.read_at
@@ -40,6 +91,58 @@ func (q *Queries) GetPostState(ctx context.Context, arg GetPostStateParams) (Get
 		&i.ReadAt,
 	)
 	return i, err
+}
+
+const getReadingListPosts = `-- name: GetReadingListPosts :many
+SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
+FROM post_states
+JOIN posts ON posts.id = post_states.post_id
+JOIN feeds ON feeds.id = posts.feed_id
+WHERE post_states.user_id = ?1 AND post_states.place = 'reading_list'
+ORDER BY post_states.changed_at DESC
+`
+
+type GetReadingListPostsRow struct {
+	ID          string
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedID      string
+	FeedName    string
+	ReadAt      sql.NullTime
+}
+
+func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]GetReadingListPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getReadingListPosts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetReadingListPostsRow
+	for rows.Next() {
+		var i GetReadingListPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Url,
+			&i.Description,
+			&i.PublishedAt,
+			&i.FeedID,
+			&i.FeedName,
+			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setPostState = `-- name: SetPostState :exec
