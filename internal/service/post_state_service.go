@@ -24,20 +24,30 @@ const (
 	PlaceTrash       Place = "trash"
 )
 
+// places describes each Place: its name as the user sees it, and whether a
+// Post can be trashed from it.
+var places = map[Place]struct {
+	label     string
+	trashable bool
+}{
+	PlaceQueue:       {label: "Queue", trashable: true},
+	PlaceReadingList: {label: "Reading list", trashable: true},
+	PlaceArchive:     {label: "Archive", trashable: true},
+	PlaceTrash:       {label: "Trash"},
+}
+
 // Label is the Place's name as the user sees it.
 func (p Place) Label() string {
-	switch p {
-	case PlaceQueue:
-		return "Queue"
-	case PlaceReadingList:
-		return "Reading list"
-	case PlaceArchive:
-		return "Archive"
-	case PlaceTrash:
-		return "Trash"
-	default:
-		return string(p)
+	if place, ok := places[p]; ok {
+		return place.label
 	}
+	return string(p)
+}
+
+// Trashable reports whether a Post can be trashed from the Place: any Place
+// but the Trash.
+func (p Place) Trashable() bool {
+	return places[p].trashable
 }
 
 // PostState is a Post's Place for a user, where it came from if it is in the
@@ -82,7 +92,7 @@ func (s *PostStateService) Keep(ctx context.Context, userID, postID uuid.UUID) e
 // remembering that Place. It is rejected if the Post is no longer there, so a
 // stale screen can't trash a Post that has since moved.
 func (s *PostStateService) Trash(ctx context.Context, userID, postID uuid.UUID, from Place) error {
-	if from == PlaceTrash {
+	if !from.Trashable() {
 		return fmt.Errorf("%w: trash a post in %s", ErrInvalidMove, from)
 	}
 	return s.move(ctx, userID, postID, "trash", []Place{from}, func(current PostState) PostState {

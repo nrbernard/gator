@@ -78,9 +78,7 @@ func (h *SearchHandler) Restore(c echo.Context) error {
 // sent as from, so a stale result can't trash a Post that has since moved.
 func (h *SearchHandler) Trash(c echo.Context) error {
 	from := service.Place(c.FormValue("from"))
-	switch from {
-	case service.PlaceQueue, service.PlaceReadingList, service.PlaceArchive:
-	default:
+	if !from.Trashable() {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid from")
 	}
 	return applyMove(c, trashFrom(h.StateService, from), h.result)
