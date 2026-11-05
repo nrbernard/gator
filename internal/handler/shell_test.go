@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
+	"image/png"
 	"net/http"
 	"os"
 	"regexp"
@@ -60,6 +63,139 @@ func TestShell_StylesheetLoadsOnlyAssetsTheAppServes(t *testing.T) {
 			continue
 		}
 		app.request(t, http.MethodGet, m[1], nil)
+	}
+}
+
+var manifestLinkPattern = regexp.MustCompile(`<link\b[^>]*\brel="manifest"[^>]*\bhref="([^"]*)"`)
+
+// webManifest is the part of the web app manifest the home screen reads.
+type webManifest struct {
+	Name      string `json:"name"`
+	ShortName string `json:"short_name"`
+	StartURL  string `json:"start_url"`
+	Display   string `json:"display"`
+	Icons     []struct {
+		Src   string `json:"src"`
+		Sizes string `json:"sizes"`
+		Type  string `json:"type"`
+	} `json:"icons"`
+}
+
+func TestShell_EveryPageLinksAManifestThatOpensTheQueueStandalone(t *testing.T) {
+	for _, page := range pages {
+		t.Run(page, func(t *testing.T) {
+			app := newTestApp(t)
+			app.post(t, "A post", "", time.Now())
+
+			body := app.request(t, http.MethodGet, page, nil).Body.String()
+
+			link := manifestLinkPattern.FindStringSubmatch(body)
+			if link == nil {
+				t.Fatalf("page links no manifest; body:\n%s", body)
+			}
+			var m webManifest
+			if err := json.Unmarshal(app.request(t, http.MethodGet, link[1], nil).Body.Bytes(), &m); err != nil {
+				t.Fatalf("manifest at %s isn't JSON: %v", link[1], err)
+			}
+			if m.Name != "Gator" || m.ShortName != "Gator" {
+				t.Errorf("manifest names the app %q (short %q), want Gator", m.Name, m.ShortName)
+			}
+			if m.StartURL != "/" {
+				t.Errorf("manifest starts at %q, want the Queue at /", m.StartURL)
+			}
+			if m.Display != "standalone" {
+				t.Errorf("manifest display is %q, want standalone", m.Display)
+			}
+			sizes := map[string]bool{}
+			for _, icon := range m.Icons {
+				if icon.Type != "image/png" {
+					t.Errorf("manifest icon %s has type %q, want image/png", icon.Src, icon.Type)
+				}
+				assertPNG(t, app, icon.Src, icon.Sizes)
+				sizes[icon.Sizes] = true
+			}
+			for _, want := range []string{"192x192", "512x512"} {
+				if !sizes[want] {
+					t.Errorf("manifest has no %s icon", want)
+				}
+			}
+		})
+	}
+}
+
+// iconLinkPattern matches a page's icons: the favicon and the home-screen icon.
+var iconLinkPattern = regexp.MustCompile(`<link\b[^>]*\brel="(icon|apple-touch-icon)"[^>]*>`)
+
+var (
+	hrefAttr  = regexp.MustCompile(`\bhref="([^"]*)"`)
+	sizesAttr = regexp.MustCompile(`\bsizes="([^"]*)"`)
+)
+
+func TestShell_EveryPageHasTheGatorIconAsFaviconAndHomeScreenIcon(t *testing.T) {
+	for _, page := range pages {
+		t.Run(page, func(t *testing.T) {
+			app := newTestApp(t)
+			app.post(t, "A post", "", time.Now())
+
+			body := app.request(t, http.MethodGet, page, nil).Body.String()
+
+			found := map[string]bool{}
+			for _, m := range iconLinkPattern.FindAllStringSubmatch(body, -1) {
+				rel, tag := m[1], m[0]
+				href, sizes := hrefAttr.FindStringSubmatch(tag), sizesAttr.FindStringSubmatch(tag)
+				if href == nil || sizes == nil {
+					t.Errorf("%s link needs an href and sizes: %s", rel, tag)
+					continue
+				}
+				assertPNG(t, app, href[1], sizes[1])
+				found[rel+" "+sizes[1]] = true
+			}
+			if !found["apple-touch-icon 180x180"] {
+				t.Errorf("page has no 180x180 apple-touch-icon; has %v", found)
+			}
+			hasFavicon := false
+			for k := range found {
+				hasFavicon = hasFavicon || strings.HasPrefix(k, "icon ")
+			}
+			if !hasFavicon {
+				t.Error("page has no PNG favicon")
+			}
+		})
+	}
+}
+
+var scriptSrcPattern = regexp.MustCompile(`<script\b[^>]*\bsrc="([^"]*)"`)
+
+// Installable without offline mode: nothing a page runs registers a service worker.
+func TestShell_NoPageRegistersAServiceWorker(t *testing.T) {
+	for _, page := range pages {
+		t.Run(page, func(t *testing.T) {
+			app := newTestApp(t)
+			app.post(t, "A post", "", time.Now())
+
+			body := app.request(t, http.MethodGet, page, nil).Body.String()
+
+			assertNotContains(t, body, "serviceWorker")
+			for _, m := range scriptSrcPattern.FindAllStringSubmatch(body, -1) {
+				script := app.request(t, http.MethodGet, m[1], nil).Body.String()
+				if strings.Contains(script, "serviceWorker.register") {
+					t.Errorf("%s registers a service worker", m[1])
+				}
+			}
+		})
+	}
+}
+
+// assertPNG requests url and checks it is a PNG of the given "WxH" size.
+func assertPNG(t *testing.T, app *testApp, url, size string) {
+	t.Helper()
+	cfg, err := png.DecodeConfig(app.request(t, http.MethodGet, url, nil).Body)
+	if err != nil {
+		t.Errorf("%s isn't a PNG: %v", url, err)
+		return
+	}
+	if got := fmt.Sprintf("%dx%d", cfg.Width, cfg.Height); got != size {
+		t.Errorf("%s is %s, want %s", url, got, size)
 	}
 }
 
