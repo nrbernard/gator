@@ -12,6 +12,7 @@ The container runs `goose up` on every start, before the server (Dockerfile `CMD
 
 - Schema is goose migrations in `sql/schema/NNN_name.sql`, numbered sequentially. Queries are in `sql/queries/`.
 - `internal/database/` is sqlc output. Change the SQL in `sql/queries/` or `sql/schema/`, then run `make generate` and commit the regenerated files with it. sqlc is a `tool` in `go.mod` and `make generate` runs that pinned version (`go tool sqlc`); don't use a sqlc from `PATH`.
+- Timestamps: SQLite's `CURRENT_TIMESTAMP` is whole-second, and Go-written times are stored in a different text format, so compare timestamp columns through `datetime(col)`; ordering on the raw column is fine, since both formats are UTC with the same leading layout. When a comparison within the same second matters (the Queue cutoff, Post `created_at`, state `changed_at`), take the time from `internal/clock` so tests can stop it with `clock.NewNull`.
 - `make` targets default `DATABASE_PATH` to `./data/gator.db`; an exported value overrides it.
 - Service tests get an in-memory SQLite database with the real migrations applied: `setupTestDB` in `internal/service/feed_service_test.go`.
 
