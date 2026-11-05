@@ -99,6 +99,24 @@ func (h *QueueHandler) TrashAll(c echo.Context) error {
 	return c.Render(http.StatusOK, "queue", queue)
 }
 
+// waitPastSecond waits until the second after t's. gator records when it
+// fetched a Post to the second, and the Queue shows Posts fetched in its
+// cutoff's second, so a fetch in that second would change the card.
+func waitPastSecond(ctx context.Context, t time.Time) error {
+	wait := time.Until(t.Truncate(time.Second).Add(time.Second))
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // requestCutoff is the cutoff the Queue page sent, if it sent a valid one.
 func requestCutoff(c echo.Context) (time.Time, bool) {
 	cutoff, err := time.Parse(time.RFC3339Nano, c.FormValue("cutoff"))
@@ -107,30 +125,33 @@ func requestCutoff(c echo.Context) (time.Time, bool) {
 
 // queue is the top of the user's Queue, for a page whose cutoff is cutoff.
 func (h *QueueHandler) queue(ctx context.Context, userID uuid.UUID, cutoff time.Time) (models.Queue, error) {
-	queue, err := h.PostService.Queue(ctx, userID)
-	if err != nil {
-		return models.Queue{}, err
-	}
-	queue.Cutoff = cutoff
-	return queue, nil
+	return h.PostService.Queue(ctx, userID, cutoff)
 }
 
-// Refresh fetches the Feeds due a fetch and responds with the top of the Queue.
-func (h *QueueHandler) Refresh(c echo.Context) error {
+// Check fetches the Feeds due a fetch and responds with the chip. What it
+// fetched waits behind the chip, so the card doesn't change. The Queue page
+// sends it when it loads, and check now sends it on demand.
+func (h *QueueHandler) Check(c echo.Context) error {
 	userID, err := currentUserID(c)
 	if err != nil {
 		return err
 	}
+	cutoff, ok := requestCutoff(c)
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
+	}
 	ctx := c.Request().Context()
+	if err := waitPastSecond(ctx, cutoff); err != nil {
+		return err
+	}
 	if err := h.FeedService.ScrapeFeeds(ctx); err != nil {
 		return fmt.Errorf("failed to scrape feeds: %w", err)
 	}
-	// Refreshing shows what it fetched, so it moves the cutoff to now.
-	queue, err := h.queue(ctx, userID, time.Now())
+	queue, err := h.queue(ctx, userID, cutoff)
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue", queue)
+	return c.Render(http.StatusOK, "queue-new", queue)
 }
 
 // Keep moves the Post to the Reading list and responds with the next card.

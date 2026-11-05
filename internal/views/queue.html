@@ -41,7 +41,7 @@
       {{ end }}
       <div class="mt-6 flex items-center gap-2">
         <a href="/reading-list" class="button button-primary">Open Reading list</a>
-        <button type="button" hx-post="/queue/refresh" hx-target="#queue" hx-swap="outerHTML" class="button button-secondary">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
+        <button type="button" hx-post="/queue/check" hx-target="#queue-new" hx-swap="outerHTML" class="button button-secondary">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
       </div>
     </main>
   {{ end }}
@@ -55,6 +55,7 @@
   <div class="flex min-w-0 items-center gap-2.5">
     <h1 class="app-title">Queue</h1>
     {{ if .Next }}<span class="text-sm text-white/60 tabular-nums">{{ .Count }} left</span>{{ end }}
+    {{ template "queue-new" . }}
   </div>
   <nav class="header-nav" aria-label="Main">
     <a href="/reading-list" class="nav-link">Reading list</a>
@@ -63,7 +64,7 @@
       <div class="menu-panel">
         {{ template "menu-links" "Queue" }}
         <div class="menu-separator"></div>
-        <button type="button" class="menu-item" hx-post="/queue/refresh" hx-target="#queue" hx-swap="outerHTML">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
+        <button type="button" class="menu-item" hx-post="/queue/check" hx-target="#queue-new" hx-swap="outerHTML">{{ template "icon-refresh-cw" "size-4" }}Check now</button>
         {{ if .Next }}
           <button type="button" class="menu-item menu-item-danger" hx-get="/queue/trash-all" hx-target="#queue" hx-swap="outerHTML">{{ template "icon-trash-2" "size-4" }}Trash all {{ .Count }} in the Queue…</button>
         {{ end }}
@@ -71,6 +72,19 @@
     </details>
   </nav>
 </header>
+{{ end }}
+
+{{/* The "N new" chip, in the header. Posts fetched after the page's cutoff wait
+     behind it, so the card never changes under a tap. Tapping it moves the cutoff
+     to when it counted them, which shows the Posts it counted. A check (on page
+     load, or Check now) runs the scrape and responds with this block alone; the
+     surrounding #queue's hx-vals send the page's cutoff. Takes the Queue. */}}
+{{ block "queue-new" . }}
+<span id="queue-new" class="contents">
+  {{ if .New }}
+    <button type="button" class="chip" hx-get="/queue/card" hx-vals='{"cutoff": "{{ .NewCutoffParam }}"}' hx-target="#queue" hx-swap="outerHTML">{{ template "icon-arrow-up" "size-3.5" }}{{ .New }} new</button>
+  {{ end }}
+</span>
 {{ end }}
 
 {{/* Trash all's confirmation, in place of the card, with its buttons where Trash and

@@ -19,7 +19,7 @@ make run
 Open http://localhost:8080.
 
 - **The user is hardcoded.** Every request runs as the user named `nick` (`internal/middleware/auth.go`), and only `make setup` creates it: without that row, every page returns a 500.
-- **Feeds are fetched on demand.** Posts update when you click **Refresh Posts**; there is no background fetcher.
+- **Feeds are fetched when the Queue opens.** Loading the Queue fetches, in the background, each Feed not fetched in the last hour, and **Check now** does the same on demand. New Posts wait behind an "N new" chip. There is no scheduled fetcher.
 
 ## Development
 

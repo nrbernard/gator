@@ -5,5 +5,8 @@
     <div class="shell">
       {{ template "queue" .Queue }}
     </div>
+    {{/* Once the page has loaded, check for new Posts in the background. They
+         arrive behind the chip. */}}
+    <div hx-post="/queue/check" hx-trigger="load" hx-target="#queue-new" hx-swap="outerHTML" hx-vals='{"cutoff": "{{ .Queue.CutoffParam }}"}'></div>
   </body>
 </html>

@@ -16,16 +16,30 @@ type PostService struct {
 	Repo *database.Queries
 }
 
-// Queue returns the newest Post in the user's Queue and the Queue's size or,
-// if the Queue is empty, when gator last fetched the user's Feeds.
-func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue, error) {
-	count, err := s.Repo.CountQueuePosts(ctx, userID.String())
+// Queue returns the Queue as a page whose cutoff is cutoff sees it: the newest
+// Post fetched by the cutoff, how many such Posts there are, and how many
+// Posts are new since. If no Post is shown, it also returns when gator last
+// fetched the user's Feeds.
+func (s *PostService) Queue(ctx context.Context, userID uuid.UUID, cutoff time.Time) (models.Queue, error) {
+	count, err := s.CountQueueCreatedBy(ctx, userID, cutoff)
 	if err != nil {
-		return models.Queue{}, fmt.Errorf("count queue: %w", err)
+		return models.Queue{}, err
 	}
-	queue := models.Queue{Count: int(count)}
+	// The chip reveals what it counted: Posts fetched by the moment it counts.
+	newCutoff := time.Now()
+	newCount, err := s.Repo.CountQueuePostsCreatedAfter(ctx, database.CountQueuePostsCreatedAfterParams{
+		UserID: userID.String(),
+		Cutoff: cutoff.UTC(),
+	})
+	if err != nil {
+		return models.Queue{}, fmt.Errorf("count new posts: %w", err)
+	}
+	queue := models.Queue{Count: count, Cutoff: cutoff, New: int(newCount), NewCutoff: newCutoff}
 
-	row, err := s.Repo.GetNextQueuePost(ctx, userID.String())
+	row, err := s.Repo.GetNextQueuePost(ctx, database.GetNextQueuePostParams{
+		UserID: userID.String(),
+		Cutoff: cutoff.UTC(),
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		fetched, err := s.Repo.GetLastFetchedAt(ctx, userID.String())
 		switch {
