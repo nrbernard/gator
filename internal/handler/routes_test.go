@@ -602,6 +602,22 @@ func TestQueue_OpeningTheQueueChecksInTheBackgroundAfterTheFirstCard(t *testing.
 	assertNotContains(t, body, "Refresh", "/queue/refresh")
 }
 
+// gator records when it fetched a Post to the second, so a check in the same
+// second as the page load must still put what it fetches behind the chip.
+func TestQueue_ACheckRightAfterThePageLoadsKeepsTheCardStill(t *testing.T) {
+	app := newTestApp(t)
+	app.serveFeed(t)
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
+
+	chip := app.request(t, http.MethodPost, "/queue/check", strings.NewReader(form)).Body.String()
+	card := app.request(t, http.MethodGet, "/queue/card?"+form, nil).Body.String()
+
+	assertContains(t, chip, ">1 new<")
+	assertContains(t, card, "caught up")
+	assertNotContains(t, card, "Freshly fetched")
+}
+
 func TestQueue_CheckNowFetchesFeedsAndCountsThePostsBehindTheChip(t *testing.T) {
 	app := newTestApp(t)
 	fetches := app.serveFeed(t)
