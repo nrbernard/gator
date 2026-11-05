@@ -28,11 +28,12 @@ primary_region = 'sea'
 
   # A deploy to a running machine waits for this, so failed migrations fail that deploy.
   # A stopped machine stays stopped during a deploy, so this check doesn't run then.
+  # The path must answer 2xx, not a redirect: Fly treats a 3xx as a failed check.
   [[http_service.checks]]
     grace_period = '10s'
     interval = '30s'
     method = 'GET'
-    path = '/posts'
+    path = '/'
     timeout = '5s'
 
 [[vm]]
