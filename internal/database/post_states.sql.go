@@ -239,6 +239,79 @@ func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]Get
 	return items, nil
 }
 
+const getTrashPosts = `-- name: GetTrashPosts :many
+SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
+FROM post_states
+JOIN posts ON posts.id = post_states.post_id
+JOIN feeds ON feeds.id = posts.feed_id
+WHERE post_states.user_id = ?1 AND post_states.place = 'trash'
+ORDER BY post_states.changed_at DESC
+`
+
+type GetTrashPostsRow struct {
+	ID          string
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedID      string
+	FeedName    string
+	ReadAt      sql.NullTime
+}
+
+// Most recently trashed first: changed_at is when the Post entered the Trash.
+func (q *Queries) GetTrashPosts(ctx context.Context, userID string) ([]GetTrashPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTrashPosts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTrashPostsRow
+	for rows.Next() {
+		var i GetTrashPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Url,
+			&i.Description,
+			&i.PublishedAt,
+			&i.FeedID,
+			&i.FeedName,
+			&i.ReadAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const restoreTrashedPostToQueue = `-- name: RestoreTrashedPostToQueue :execrows
+DELETE FROM post_states
+WHERE user_id = ?1 AND post_id = ?2 AND place = 'trash' AND trashed_from = 'queue'
+`
+
+type RestoreTrashedPostToQueueParams struct {
+	UserID string
+	PostID string
+}
+
+// A Post with no row is in the Queue. Only a trashed Post is restored, so a
+// stale screen can't send a Post elsewhere back to the Queue.
+func (q *Queries) RestoreTrashedPostToQueue(ctx context.Context, arg RestoreTrashedPostToQueueParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, restoreTrashedPostToQueue, arg.UserID, arg.PostID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setPostState = `-- name: SetPostState :exec
 INSERT INTO post_states (user_id, post_id, place, trashed_from, read_at, changed_at)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
