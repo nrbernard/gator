@@ -90,6 +90,7 @@ func newTestApp(t *testing.T) *testApp {
 	Register(app.e, Handlers{
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
 		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
+		Archive:     &ArchiveHandler{PostService: posts, StateService: app.states},
 		Post:        &PostHandler{PostService: posts},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
 	})
@@ -320,6 +321,122 @@ func TestReadingList_RejectsActionsOnAPostNotOnTheReadingList(t *testing.T) {
 		}
 	}
 	app.assertPlace(t, queued, service.PlaceQueue)
+}
+
+// archive Keeps and then Archives each Post, in order.
+func (a *testApp) archive(t *testing.T, postIDs ...uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	for _, id := range postIDs {
+		if err := a.states.Keep(ctx, a.userID, id); err != nil {
+			t.Fatalf("Keep: %v", err)
+		}
+		if err := a.states.Archive(ctx, a.userID, id); err != nil {
+			t.Fatalf("Archive: %v", err)
+		}
+	}
+}
+
+func TestArchive_ListsArchivedPostsMostRecentlyArchivedFirst(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	// Published order is the reverse of archived order, so the test tells them apart.
+	first := app.post(t, "Archived first", "", now)
+	second := app.post(t, "Archived second", "", now.Add(-1*time.Hour))
+	kept := app.post(t, "Still on the Reading list", "", now)
+	app.post(t, "Queue post", "", now)
+	app.archive(t, first, second)
+	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/archive", nil).Body.String()
+
+	assertContains(t, body, `id="archive"`, "Archived first", "Archived second", "Example Feed",
+		"http://example.com/posts/"+first.String())
+	assertNotContains(t, body, "Still on the Reading list", "Queue post")
+	if strings.Index(body, "Archived second") > strings.Index(body, "Archived first") {
+		t.Errorf("Archived first is listed before Archived second; want most recently archived first")
+	}
+}
+
+func TestArchive_EachPostOffersMoveToReadingListAndTrashOverHtmx(t *testing.T) {
+	app := newTestApp(t)
+	archived := app.post(t, "Archived post", "", time.Now())
+	app.archive(t, archived)
+
+	body := app.request(t, http.MethodGet, "/archive", nil).Body.String()
+
+	id := archived.String()
+	assertContains(t, body, "htmx", `hx-post="/archive/`+id+`/unarchive"`, `hx-post="/archive/`+id+`/trash"`,
+		">Move to Reading list<", ">Trash<")
+}
+
+func TestArchive_ActionsUpdateTheListInPlace(t *testing.T) {
+	tests := []struct {
+		action string
+		want   service.PostState
+	}{
+		{"unarchive", service.PostState{Place: service.PlaceReadingList}},
+		{"trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceArchive}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			app := newTestApp(t)
+			ctx := context.Background()
+			other := app.post(t, "Other archived post", "", time.Now())
+			acted := app.post(t, "Acted on", "", time.Now())
+			app.archive(t, other, acted)
+
+			body := app.request(t, http.MethodPost, "/archive/"+acted.String()+"/"+tc.action, nil).Body.String()
+
+			got, err := app.states.State(ctx, app.userID, acted)
+			if err != nil {
+				t.Fatalf("State: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("state = %+v, want %+v", got, tc.want)
+			}
+			assertContains(t, body, `id="archive"`, "Other archived post")
+			assertNotContains(t, body, "<html", "Acted on")
+		})
+	}
+}
+
+func TestArchive_EmptyArchiveSaysSo(t *testing.T) {
+	app := newTestApp(t)
+
+	body := app.request(t, http.MethodGet, "/archive", nil).Body.String()
+
+	assertContains(t, body, "Nothing in the Archive", `href="/reading-list"`)
+}
+
+func TestArchive_RejectsActionsOnAPostNotInTheArchive(t *testing.T) {
+	app := newTestApp(t)
+	kept := app.post(t, "Kept post", "", time.Now())
+	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	for _, action := range []string{"unarchive", "trash"} {
+		rec := httptest.NewRecorder()
+		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/archive/"+kept.String()+"/"+action, nil))
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("%s: status = %d, want %d", action, rec.Code, http.StatusConflict)
+		}
+	}
+	app.assertPlace(t, kept, service.PlaceReadingList)
+}
+
+func TestNav_LinksToTheArchiveFromEveryScreen(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, target := range []string{"/", "/reading-list", "/archive"} {
+		body := app.request(t, http.MethodGet, target, nil).Body.String()
+		assertContains(t, body, `href="/archive"`)
+	}
 }
 
 func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {

@@ -65,6 +65,28 @@ func (s *PostService) ReadingList(ctx context.Context, userID uuid.UUID) ([]mode
 	return posts, nil
 }
 
+// Archive returns the user's archived Posts, most recently archived first.
+func (s *PostService) Archive(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
+	rows, err := s.Repo.GetArchivePosts(ctx, userID.String())
+	if err != nil {
+		return nil, fmt.Errorf("get archive: %w", err)
+	}
+	posts := make([]models.Post, 0, len(rows))
+	for _, row := range rows {
+		posts = append(posts, models.Post{
+			ID:          uuid.MustParse(row.ID),
+			Title:       row.Title,
+			Link:        row.Url,
+			Description: row.Description.String,
+			PublishedAt: row.PublishedAt,
+			FeedID:      uuid.MustParse(row.FeedID),
+			FeedName:    row.FeedName,
+			IsRead:      row.ReadAt.Valid,
+		})
+	}
+	return posts, nil
+}
+
 // SearchPosts returns the newest 100 Posts, in any Place, whose title or
 // description contains query.
 func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query string) ([]models.Post, error) {
