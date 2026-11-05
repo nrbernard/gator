@@ -82,68 +82,46 @@ func (s *PostService) CountQueueCreatedBy(ctx context.Context, userID uuid.UUID,
 // ReadingList returns the user's kept Posts, unread first, then most recently
 // kept first.
 func (s *PostService) ReadingList(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
-	rows, err := s.Repo.GetReadingListPosts(ctx, userID.String())
-	if err != nil {
-		return nil, fmt.Errorf("get reading list: %w", err)
-	}
-	posts := make([]models.Post, 0, len(rows))
-	for _, row := range rows {
-		posts = append(posts, models.Post{
-			ID:          uuid.MustParse(row.ID),
-			Title:       row.Title,
-			Link:        row.Url,
-			Description: row.Description.String,
-			PublishedAt: row.PublishedAt,
-			FeedID:      uuid.MustParse(row.FeedID),
-			FeedName:    row.FeedName,
-			IsRead:      row.ReadAt.Valid,
-		})
-	}
-	return posts, nil
+	return s.postsIn(ctx, userID, PlaceReadingList)
 }
 
 // Archive returns the user's archived Posts, most recently archived first.
 func (s *PostService) Archive(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
-	rows, err := s.Repo.GetArchivePosts(ctx, userID.String())
-	if err != nil {
-		return nil, fmt.Errorf("get archive: %w", err)
-	}
-	posts := make([]models.Post, 0, len(rows))
-	for _, row := range rows {
-		posts = append(posts, models.Post{
-			ID:          uuid.MustParse(row.ID),
-			Title:       row.Title,
-			Link:        row.Url,
-			Description: row.Description.String,
-			PublishedAt: row.PublishedAt,
-			FeedID:      uuid.MustParse(row.FeedID),
-			FeedName:    row.FeedName,
-			IsRead:      row.ReadAt.Valid,
-		})
-	}
-	return posts, nil
+	return s.postsIn(ctx, userID, PlaceArchive)
 }
 
 // Trash returns the user's trashed Posts, most recently trashed first.
 func (s *PostService) Trash(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
-	rows, err := s.Repo.GetTrashPosts(ctx, userID.String())
+	return s.postsIn(ctx, userID, PlaceTrash)
+}
+
+// postsIn lists the Posts in a Place other than the Queue.
+func (s *PostService) postsIn(ctx context.Context, userID uuid.UUID, place Place) ([]models.Post, error) {
+	rows, err := s.Repo.GetPostsInPlace(ctx, database.GetPostsInPlaceParams{
+		UserID: userID.String(),
+		Place:  string(place),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("get trash: %w", err)
+		return nil, fmt.Errorf("get %s: %w", place.Label(), err)
 	}
 	posts := make([]models.Post, 0, len(rows))
 	for _, row := range rows {
-		posts = append(posts, models.Post{
-			ID:          uuid.MustParse(row.ID),
-			Title:       row.Title,
-			Link:        row.Url,
-			Description: row.Description.String,
-			PublishedAt: row.PublishedAt,
-			FeedID:      uuid.MustParse(row.FeedID),
-			FeedName:    row.FeedName,
-			IsRead:      row.ReadAt.Valid,
-		})
+		posts = append(posts, postFromRow(row))
 	}
 	return posts, nil
+}
+
+func postFromRow(row database.GetPostsInPlaceRow) models.Post {
+	return models.Post{
+		ID:          uuid.MustParse(row.ID),
+		Title:       row.Title,
+		Link:        row.Url,
+		Description: row.Description.String,
+		PublishedAt: row.PublishedAt,
+		FeedID:      uuid.MustParse(row.FeedID),
+		FeedName:    row.FeedName,
+		IsRead:      row.ReadAt.Valid,
+	}
 }
 
 // SearchResult is a Post found by search, with the Place it is in.
@@ -166,19 +144,7 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query s
 
 	results := make([]SearchResult, 0, len(rows))
 	for _, row := range rows {
-		results = append(results, SearchResult{
-			Post: models.Post{
-				ID:          uuid.MustParse(row.ID),
-				Title:       row.Title,
-				Link:        row.Url,
-				Description: row.Description.String,
-				PublishedAt: row.PublishedAt,
-				FeedID:      uuid.MustParse(row.FeedID),
-				FeedName:    row.FeedName,
-				IsRead:      row.ReadAt.Valid,
-			},
-			Place: placeOf(row.Place),
-		})
+		results = append(results, searchResultFromRow(row))
 	}
 	return results, nil
 }
@@ -195,6 +161,11 @@ func (s *PostService) SearchResult(ctx context.Context, userID, postID uuid.UUID
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("get search result: %w", err)
 	}
+	// GetSearchResult returns the same columns as SearchPostsByUser.
+	return searchResultFromRow(database.SearchPostsByUserRow(row)), nil
+}
+
+func searchResultFromRow(row database.SearchPostsByUserRow) SearchResult {
 	return SearchResult{
 		Post: models.Post{
 			ID:          uuid.MustParse(row.ID),
@@ -207,7 +178,7 @@ func (s *PostService) SearchResult(ctx context.Context, userID, postID uuid.UUID
 			IsRead:      row.ReadAt.Valid,
 		},
 		Place: placeOf(row.Place),
-	}, nil
+	}
 }
 
 // placeOf is the Place a post_states place column records: NULL is the Queue.

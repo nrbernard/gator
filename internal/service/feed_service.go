@@ -63,12 +63,7 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 		if err != nil {
 			return models.Feed{}, fmt.Errorf("unremove feed: %w", err)
 		}
-		return models.Feed{
-			ID:          uuid.MustParse(dbFeed.ID),
-			Name:        dbFeed.Name,
-			Description: &dbFeed.Description.String,
-			Url:         dbFeed.Url,
-		}, nil
+		return feedFromRow(dbFeed), nil
 	}
 
 	feedData, err := feedparser.FetchFeed(context.Background(), feedUrl)
@@ -95,14 +90,19 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 		return models.Feed{}, err
 	}
 
-	feed := models.Feed{
-		ID:          uuid.MustParse(dbFeed.ID),
-		Name:        dbFeed.Name,
-		Description: &dbFeed.Description.String,
-		Url:         dbFeed.Url,
-	}
+	return feedFromRow(dbFeed), nil
+}
 
-	return feed, nil
+func feedFromRow(dbFeed database.Feed) models.Feed {
+	return models.Feed{
+		ID:               uuid.MustParse(dbFeed.ID),
+		Name:             dbFeed.Name,
+		Description:      &dbFeed.Description.String,
+		Url:              dbFeed.Url,
+		LastFetchedAt:    timePtr(dbFeed.LastFetchedAt),
+		LastFetchError:   dbFeed.LastFetchError.String,
+		LastFetchErrorAt: timePtr(dbFeed.LastFetchErrorAt),
+	}
 }
 
 // ErrFeedNotFound is returned when removing a Feed that doesn't exist or is

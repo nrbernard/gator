@@ -73,33 +73,16 @@ WHERE posts.feed_id IN (
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
 AND datetime(posts.created_at) <= datetime(@cutoff);
 
--- name: GetReadingListPosts :many
--- Unread first, then most recently kept: changed_at is when the Post entered
--- the Reading list.
+-- name: GetPostsInPlace :many
+-- The Posts in the Reading list, the Archive, or the Trash, most recently
+-- moved there first (changed_at is when the Post entered its Place); on the
+-- Reading list, unread first.
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
 FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id
-WHERE post_states.user_id = @user_id AND post_states.place = 'reading_list'
-ORDER BY post_states.read_at IS NOT NULL, post_states.changed_at DESC;
-
--- name: GetArchivePosts :many
--- Most recently archived first: changed_at is when the Post entered the Archive.
-SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
-FROM post_states
-JOIN posts ON posts.id = post_states.post_id
-JOIN feeds ON feeds.id = posts.feed_id
-WHERE post_states.user_id = @user_id AND post_states.place = 'archive'
-ORDER BY post_states.changed_at DESC;
-
--- name: GetTrashPosts :many
--- Most recently trashed first: changed_at is when the Post entered the Trash.
-SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
-FROM post_states
-JOIN posts ON posts.id = post_states.post_id
-JOIN feeds ON feeds.id = posts.feed_id
-WHERE post_states.user_id = @user_id AND post_states.place = 'trash'
-ORDER BY post_states.changed_at DESC;
+WHERE post_states.user_id = @user_id AND post_states.place = @place
+ORDER BY (post_states.place = 'reading_list' AND post_states.read_at IS NOT NULL), post_states.changed_at DESC;
 
 -- name: RestoreTrashedPostToQueue :execrows
 -- A Post with no row is in the Queue. Only a trashed Post is restored, so a

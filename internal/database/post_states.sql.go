@@ -62,59 +62,6 @@ func (q *Queries) CountQueuePostsCreatedBy(ctx context.Context, arg CountQueuePo
 	return count, err
 }
 
-const getArchivePosts = `-- name: GetArchivePosts :many
-SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
-FROM post_states
-JOIN posts ON posts.id = post_states.post_id
-JOIN feeds ON feeds.id = posts.feed_id
-WHERE post_states.user_id = ?1 AND post_states.place = 'archive'
-ORDER BY post_states.changed_at DESC
-`
-
-type GetArchivePostsRow struct {
-	ID          string
-	Title       string
-	Url         string
-	Description sql.NullString
-	PublishedAt time.Time
-	FeedID      string
-	FeedName    string
-	ReadAt      sql.NullTime
-}
-
-// Most recently archived first: changed_at is when the Post entered the Archive.
-func (q *Queries) GetArchivePosts(ctx context.Context, userID string) ([]GetArchivePostsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getArchivePosts, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetArchivePostsRow
-	for rows.Next() {
-		var i GetArchivePostsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Url,
-			&i.Description,
-			&i.PublishedAt,
-			&i.FeedID,
-			&i.FeedName,
-			&i.ReadAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getLastFetchedAt = `-- name: GetLastFetchedAt :one
 SELECT feeds.last_fetched_at
 FROM feeds
@@ -216,16 +163,21 @@ func (q *Queries) GetPostState(ctx context.Context, arg GetPostStateParams) (Get
 	return i, err
 }
 
-const getReadingListPosts = `-- name: GetReadingListPosts :many
+const getPostsInPlace = `-- name: GetPostsInPlace :many
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
 FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id
-WHERE post_states.user_id = ?1 AND post_states.place = 'reading_list'
-ORDER BY post_states.read_at IS NOT NULL, post_states.changed_at DESC
+WHERE post_states.user_id = ?1 AND post_states.place = ?2
+ORDER BY (post_states.place = 'reading_list' AND post_states.read_at IS NOT NULL), post_states.changed_at DESC
 `
 
-type GetReadingListPostsRow struct {
+type GetPostsInPlaceParams struct {
+	UserID string
+	Place  string
+}
+
+type GetPostsInPlaceRow struct {
 	ID          string
 	Title       string
 	Url         string
@@ -236,70 +188,18 @@ type GetReadingListPostsRow struct {
 	ReadAt      sql.NullTime
 }
 
-// Unread first, then most recently kept: changed_at is when the Post entered
-// the Reading list.
-func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]GetReadingListPostsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getReadingListPosts, userID)
+// The Posts in the Reading list, the Archive, or the Trash, most recently
+// moved there first (changed_at is when the Post entered its Place); on the
+// Reading list, unread first.
+func (q *Queries) GetPostsInPlace(ctx context.Context, arg GetPostsInPlaceParams) ([]GetPostsInPlaceRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsInPlace, arg.UserID, arg.Place)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetReadingListPostsRow
+	var items []GetPostsInPlaceRow
 	for rows.Next() {
-		var i GetReadingListPostsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Url,
-			&i.Description,
-			&i.PublishedAt,
-			&i.FeedID,
-			&i.FeedName,
-			&i.ReadAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getTrashPosts = `-- name: GetTrashPosts :many
-SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
-FROM post_states
-JOIN posts ON posts.id = post_states.post_id
-JOIN feeds ON feeds.id = posts.feed_id
-WHERE post_states.user_id = ?1 AND post_states.place = 'trash'
-ORDER BY post_states.changed_at DESC
-`
-
-type GetTrashPostsRow struct {
-	ID          string
-	Title       string
-	Url         string
-	Description sql.NullString
-	PublishedAt time.Time
-	FeedID      string
-	FeedName    string
-	ReadAt      sql.NullTime
-}
-
-// Most recently trashed first: changed_at is when the Post entered the Trash.
-func (q *Queries) GetTrashPosts(ctx context.Context, userID string) ([]GetTrashPostsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTrashPosts, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetTrashPostsRow
-	for rows.Next() {
-		var i GetTrashPostsRow
+		var i GetPostsInPlaceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
