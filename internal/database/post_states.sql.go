@@ -239,6 +239,26 @@ func (q *Queries) GetReadingListPosts(ctx context.Context, userID string) ([]Get
 	return items, nil
 }
 
+const restoreTrashedPostToQueue = `-- name: RestoreTrashedPostToQueue :execrows
+DELETE FROM post_states
+WHERE user_id = ?1 AND post_id = ?2 AND place = 'trash' AND trashed_from = 'queue'
+`
+
+type RestoreTrashedPostToQueueParams struct {
+	UserID string
+	PostID string
+}
+
+// A Post with no row is in the Queue. Only a trashed Post is restored, so a
+// stale screen can't send a Post elsewhere back to the Queue.
+func (q *Queries) RestoreTrashedPostToQueue(ctx context.Context, arg RestoreTrashedPostToQueueParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, restoreTrashedPostToQueue, arg.UserID, arg.PostID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setPostState = `-- name: SetPostState :exec
 INSERT INTO post_states (user_id, post_id, place, trashed_from, read_at, changed_at)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6)

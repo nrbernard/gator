@@ -117,6 +117,32 @@ func (s *PostStateService) Unarchive(ctx context.Context, userID, postID uuid.UU
 	})
 }
 
+// Restore returns a trashed Post to the Place it was trashed from, with its
+// Read mark. It is rejected for a Post that isn't in the Trash.
+func (s *PostStateService) Restore(ctx context.Context, userID, postID uuid.UUID) error {
+	current, err := s.State(ctx, userID, postID)
+	if err != nil {
+		return err
+	}
+	// Only a trashed Post has TrashedFrom, so move rejects every other Post.
+	if current.TrashedFrom != PlaceQueue {
+		return s.move(ctx, userID, postID, "restore", []Place{PlaceTrash}, func(current PostState) PostState {
+			return PostState{Place: current.TrashedFrom, Read: current.Read}
+		})
+	}
+	n, err := s.Repo.RestoreTrashedPostToQueue(ctx, database.RestoreTrashedPostToQueueParams{
+		UserID: userID.String(),
+		PostID: postID.String(),
+	})
+	if err != nil {
+		return fmt.Errorf("restore: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: restore a post no longer in the trash", ErrInvalidMove)
+	}
+	return nil
+}
+
 // move applies to to the Post's current state, provided the Post is in one of
 // the from Places. The Read mark's original time survives a move that keeps it.
 func (s *PostStateService) move(ctx context.Context, userID, postID uuid.UUID, name string, from []Place, to func(PostState) PostState) error {

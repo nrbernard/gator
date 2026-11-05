@@ -67,6 +67,12 @@ JOIN feeds ON feeds.id = posts.feed_id
 WHERE post_states.user_id = @user_id AND post_states.place = 'archive'
 ORDER BY post_states.changed_at DESC;
 
+-- name: RestoreTrashedPostToQueue :execrows
+-- A Post with no row is in the Queue. Only a trashed Post is restored, so a
+-- stale screen can't send a Post elsewhere back to the Queue.
+DELETE FROM post_states
+WHERE user_id = @user_id AND post_id = @post_id AND place = 'trash' AND trashed_from = 'queue';
+
 -- name: SetPostState :exec
 -- changed_at is when the Post entered its Place, so a change to the Read mark
 -- alone keeps it.
