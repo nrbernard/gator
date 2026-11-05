@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 )
 
@@ -57,7 +58,8 @@ var (
 // PostStateService owns every move of a Post between Places, and rejects the
 // moves that don't apply.
 type PostStateService struct {
-	Repo *database.Queries
+	Repo  *database.Queries
+	Clock *clock.Clock
 }
 
 // State returns where the Post is for the user.
@@ -95,7 +97,7 @@ func (s *PostStateService) TrashAll(ctx context.Context, userID uuid.UUID, cutof
 	n, err := s.Repo.TrashQueuePostsCreatedBy(ctx, database.TrashQueuePostsCreatedByParams{
 		UserID:    userID.String(),
 		Cutoff:    cutoff.UTC(),
-		ChangedAt: time.Now().UTC(),
+		ChangedAt: s.Clock.Now().UTC(),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("trash all: %w", err)
@@ -185,7 +187,7 @@ func (s *PostStateService) move(ctx context.Context, userID, postID uuid.UUID, n
 	next := to(current)
 
 	// UTC, so stored times sort as text alongside SQLite's CURRENT_TIMESTAMP.
-	now := time.Now().UTC()
+	now := s.Clock.Now().UTC()
 	readAt := row.ReadAt
 	switch {
 	case !next.Read:

@@ -8,12 +8,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/models"
 )
 
 type PostService struct {
-	Repo *database.Queries
+	Repo  *database.Queries
+	Clock *clock.Clock
+}
+
+// Cutoff is the cutoff for a Queue page loading now.
+func (s *PostService) Cutoff() time.Time {
+	return s.Clock.Now()
 }
 
 // Queue returns the Queue as a page whose cutoff is cutoff sees it: the newest
@@ -26,7 +33,7 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID, cutoff time.T
 		return models.Queue{}, err
 	}
 	// The chip reveals what it counted: Posts fetched by the moment it counts.
-	newCutoff := time.Now()
+	newCutoff := s.Cutoff()
 	newCount, err := s.Repo.CountQueuePostsCreatedAfter(ctx, database.CountQueuePostsCreatedAfterParams{
 		UserID: userID.String(),
 		Cutoff: cutoff.UTC(),

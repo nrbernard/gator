@@ -35,7 +35,7 @@ func (h *QueueHandler) Index(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	queue, err := h.queue(c.Request().Context(), userID, time.Now())
+	queue, err := h.queue(c.Request().Context(), userID, h.PostService.Cutoff())
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (h *QueueHandler) Card(c echo.Context) error {
 	}
 	cutoff, ok := requestCutoff(c)
 	if !ok {
-		cutoff = time.Now()
+		cutoff = h.PostService.Cutoff()
 	}
 	queue, err := h.queue(c.Request().Context(), userID, cutoff)
 	if err != nil {
@@ -187,7 +187,7 @@ func (h *QueueHandler) triage(c echo.Context, move func(context.Context, uuid.UU
 	}
 	cutoff, ok := requestCutoff(c)
 	if !ok {
-		cutoff = time.Now()
+		cutoff = h.PostService.Cutoff()
 	}
 	queue, err := h.queue(ctx, userID, cutoff)
 	if err != nil {

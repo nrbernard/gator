@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/handler"
 	"github.com/nrbernard/gator/internal/middleware"
@@ -50,9 +51,10 @@ func main() {
 	dbQueries := database.New(db)
 
 	userService := &service.UserService{Repo: dbQueries}
-	postService := &service.PostService{Repo: dbQueries}
+	systemClock := clock.New()
+	postService := &service.PostService{Repo: dbQueries, Clock: systemClock}
 	feedService := &service.FeedService{Repo: dbQueries}
-	stateService := &service.PostStateService{Repo: dbQueries}
+	stateService := &service.PostStateService{Repo: dbQueries, Clock: systemClock}
 
 	e.Use(middleware.CurrentUser(userService))
 

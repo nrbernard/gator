@@ -11,8 +11,8 @@ import (
 
 func TestPostService_ReadingListIsUnreadFirstThenMostRecentlyKept(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	states := &PostStateService{Repo: f.queries}
-	posts := &PostService{Repo: f.queries}
+	states := f.stateService()
+	posts := &PostService{Repo: f.queries, Clock: f.clock}
 	ctx := context.Background()
 	now := time.Now()
 	// Published order is the reverse of kept order, so it can't explain the result.
@@ -24,6 +24,7 @@ func TestPostService_ReadingListIsUnreadFirstThenMostRecentlyKept(t *testing.T) 
 		if err := states.Keep(ctx, f.userID, postID); err != nil {
 			t.Fatalf("Keep: %v", err)
 		}
+		f.clock.Advance(time.Second)
 	}
 	// Reading a Post, or reading it and undoing that, doesn't change when it was kept.
 	for _, postID := range []uuid.UUID{first, third, second} {

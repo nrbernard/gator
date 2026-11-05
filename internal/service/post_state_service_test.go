@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 )
 
@@ -16,6 +17,8 @@ type fixture struct {
 	queries *database.Queries
 	userID  uuid.UUID
 	feedID  uuid.UUID
+	// clock is stopped at the time the fixture was made.
+	clock *clock.Clock
 }
 
 func newFixture(t *testing.T, queries *database.Queries) fixture {
@@ -37,7 +40,7 @@ func newFixture(t *testing.T, queries *database.Queries) fixture {
 	}); err != nil {
 		t.Fatalf("create feed follow: %v", err)
 	}
-	return fixture{queries: queries, userID: userID, feedID: feedID}
+	return fixture{queries: queries, userID: userID, feedID: feedID, clock: clock.NewNull(time.Now())}
 }
 
 func (f fixture) post(t *testing.T, title string, publishedAt time.Time) uuid.UUID {
@@ -49,6 +52,11 @@ func (f fixture) post(t *testing.T, title string, publishedAt time.Time) uuid.UU
 		t.Fatalf("create post: %v", err)
 	}
 	return id
+}
+
+// stateService is the state service over the fixture's database and clock.
+func (f fixture) stateService() *PostStateService {
+	return &PostStateService{Repo: f.queries, Clock: f.clock}
 }
 
 func assertState(t *testing.T, s *PostStateService, userID, postID uuid.UUID, want PostState) {
@@ -64,7 +72,7 @@ func assertState(t *testing.T, s *PostStateService, userID, postID uuid.UUID, wa
 
 func TestPostStateService_NewPostIsInTheQueue(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	postID := f.post(t, "Fresh", time.Now())
 
 	assertState(t, s, f.userID, postID, PostState{Place: PlaceQueue})
@@ -72,7 +80,7 @@ func TestPostStateService_NewPostIsInTheQueue(t *testing.T) {
 
 func TestPostStateService_KeepMovesAQueuePostToTheReadingList(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	postID := f.post(t, "Worth reading", time.Now())
 
 	if err := s.Keep(context.Background(), f.userID, postID); err != nil {
@@ -84,7 +92,7 @@ func TestPostStateService_KeepMovesAQueuePostToTheReadingList(t *testing.T) {
 
 func TestPostStateService_TrashMovesAQueuePostToTheTrashFromTheQueue(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	postID := f.post(t, "Not for me", time.Now())
 
 	if err := s.Trash(context.Background(), f.userID, postID, PlaceQueue); err != nil {
@@ -96,7 +104,7 @@ func TestPostStateService_TrashMovesAQueuePostToTheTrashFromTheQueue(t *testing.
 
 func TestPostStateService_TrashMovesAReadingListPostToTheTrashFromTheReadingList(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	postID := f.post(t, "Changed my mind", time.Now())
 	if err := s.Keep(ctx, f.userID, postID); err != nil {
@@ -112,7 +120,7 @@ func TestPostStateService_TrashMovesAReadingListPostToTheTrashFromTheReadingList
 
 func TestPostStateService_OpenMarksAReadingListPostReadAndLeavesItThere(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	postID := f.post(t, "Reading this now", time.Now())
 	if err := s.Keep(ctx, f.userID, postID); err != nil {
@@ -128,7 +136,7 @@ func TestPostStateService_OpenMarksAReadingListPostReadAndLeavesItThere(t *testi
 
 func TestPostStateService_OpenKeepsAQueuePostAndMarksItRead(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	postID := f.post(t, "Clicked through", time.Now())
 
 	if err := s.Open(context.Background(), f.userID, postID); err != nil {
@@ -140,7 +148,7 @@ func TestPostStateService_OpenKeepsAQueuePostAndMarksItRead(t *testing.T) {
 
 func TestPostStateService_ToggleReadFlipsTheMarkOnAReadingListPost(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	postID := f.post(t, "Opened by accident", time.Now())
 	if err := s.Keep(ctx, f.userID, postID); err != nil {
@@ -160,7 +168,7 @@ func TestPostStateService_ToggleReadFlipsTheMarkOnAReadingListPost(t *testing.T)
 
 func TestPostStateService_ArchiveMovesAReadingListPostToTheArchive(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	postID := f.post(t, "Finished with it", time.Now())
 	if err := s.Open(ctx, f.userID, postID); err != nil {
@@ -176,7 +184,7 @@ func TestPostStateService_ArchiveMovesAReadingListPostToTheArchive(t *testing.T)
 
 func TestPostStateService_UnarchiveMovesAnArchivedPostBackToTheReadingList(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	postID := f.post(t, "Worth rereading", time.Now())
 	if err := s.Open(ctx, f.userID, postID); err != nil {
@@ -195,7 +203,7 @@ func TestPostStateService_UnarchiveMovesAnArchivedPostBackToTheReadingList(t *te
 
 func TestPostStateService_TrashMovesAnArchivedPostToTheTrashFromTheArchive(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	postID := f.post(t, "Not worth keeping", time.Now())
 	if err := s.Keep(ctx, f.userID, postID); err != nil {
@@ -256,7 +264,7 @@ func TestPostStateService_RestoreReturnsATrashedPostWhereItCameFrom(t *testing.T
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t, setupTestDB(t))
-			s := &PostStateService{Repo: f.queries}
+			s := f.stateService()
 			ctx := context.Background()
 			postID := f.post(t, "Trashed by mistake", time.Now())
 			for _, m := range tc.prepare {
@@ -329,7 +337,7 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t, setupTestDB(t))
-			s := &PostStateService{Repo: f.queries}
+			s := f.stateService()
 			ctx := context.Background()
 			postID := f.post(t, "Post", time.Now())
 			for _, m := range tc.prepare {
@@ -352,7 +360,7 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 // be lost; one trashed from elsewhere still goes back.
 func TestPostStateService_RestoreOfARemovedFeedsPostOnlyLeavesTheTrashIfNotForTheQueue(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	fromQueue := f.post(t, "Trashed from the Queue", time.Now())
 	fromReadingList := f.post(t, "Trashed from the Reading list", time.Now())
@@ -382,7 +390,7 @@ func TestPostStateService_RestoreOfARemovedFeedsPostOnlyLeavesTheTrashIfNotForTh
 
 func TestPostStateService_RejectsMovesOfAMissingPost(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 
 	err := s.Keep(context.Background(), f.userID, uuid.New())
 
@@ -403,7 +411,7 @@ func setCreatedAt(t *testing.T, db *sql.DB, postID uuid.UUID, at time.Time) {
 func TestPostStateService_TrashAllTrashesQueuePostsCreatedByTheCutoff(t *testing.T) {
 	db := setupTestSQLDB(t)
 	f := newFixture(t, database.New(db))
-	s := &PostStateService{Repo: f.queries}
+	s := f.stateService()
 	ctx := context.Background()
 	cutoff := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
 	seen := f.post(t, "Seen", time.Now())

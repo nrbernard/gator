@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/pressly/goose/v3"
 	goosedb "github.com/pressly/goose/v3/database"
@@ -70,7 +71,7 @@ func TestPostStatesMigration_BackfillsFromSavesAndReads(t *testing.T) {
 		t.Fatalf("apply remaining migrations: %v", err)
 	}
 
-	s := &PostStateService{Repo: database.New(db)}
+	s := &PostStateService{Repo: database.New(db), Clock: clock.New()}
 	assertState(t, s, userID, savedRead, PostState{Place: PlaceReadingList, Read: true})
 	assertState(t, s, userID, savedUnread, PostState{Place: PlaceReadingList})
 	assertState(t, s, userID, unsavedRead, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})

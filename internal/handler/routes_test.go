@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/service"
 	"github.com/pressly/goose/v3"
@@ -38,11 +39,21 @@ type testApp struct {
 	db      *sql.DB
 	queries *database.Queries
 	states  *service.PostStateService
+	clock   *clock.Clock
 	userID  uuid.UUID
 	feedID  uuid.UUID
 }
 
+// newTestApp's clock is stopped a minute after the system clock, which the
+// database uses to record when gator fetched a Post: Posts a test creates were
+// fetched before any Queue page it loads.
 func newTestApp(t *testing.T) *testApp {
+	t.Helper()
+	return newTestAppOn(t, clock.NewNull(time.Now().Add(time.Minute)))
+}
+
+// newTestAppOn is newTestApp with the app's clock c.
+func newTestAppOn(t *testing.T, c *clock.Clock) *testApp {
 	t.Helper()
 	ctx := context.Background()
 
@@ -80,7 +91,8 @@ func newTestApp(t *testing.T) *testApp {
 		e:       echo.New(),
 		db:      db,
 		queries: queries,
-		states:  &service.PostStateService{Repo: queries},
+		states:  &service.PostStateService{Repo: queries, Clock: c},
+		clock:   c,
 		userID:  userID,
 		feedID:  feedID,
 	}
@@ -91,7 +103,7 @@ func newTestApp(t *testing.T) *testApp {
 			return next(c)
 		}
 	})
-	posts := &service.PostService{Repo: queries}
+	posts := &service.PostService{Repo: queries, Clock: c}
 	feeds := &service.FeedService{Repo: queries}
 	Register(app.e, Handlers{
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
@@ -231,14 +243,11 @@ func TestQueue_OpeningTheCardGoesToTheSiteAndKeepsThePostMarkedRead(t *testing.T
 	assertNotContains(t, body, "Top post", "<html")
 }
 
-// fetchedAfterPageLoad makes the Post look fetched a minute from now, after any
-// Queue page loaded in the test.
+// fetchedAfterPageLoad makes the Post look fetched a minute after the app's
+// clock, after any Queue page loaded in the test.
 func (a *testApp) fetchedAfterPageLoad(t *testing.T, postID uuid.UUID) {
 	t.Helper()
-	later := time.Now().Add(time.Minute).UTC().Format(time.DateTime)
-	if _, err := a.db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", later, postID.String()); err != nil {
-		t.Fatalf("set created_at: %v", err)
-	}
+	a.fetchedAt(t, postID, a.clock.Now().Add(time.Minute))
 }
 
 var cutoffPattern = regexp.MustCompile(`"cutoff":\s*"([^"]+)"`)
@@ -567,7 +576,9 @@ func TestArchive_ListsArchivedPostsMostRecentlyArchivedFirst(t *testing.T) {
 	second := app.post(t, "Archived second", "", now.Add(-1*time.Hour))
 	kept := app.post(t, "Still on the Reading list", "", now)
 	app.post(t, "Queue post", "", now)
-	app.archive(t, first, second)
+	app.archive(t, first)
+	app.clock.Advance(time.Second)
+	app.archive(t, second)
 	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
 		t.Fatalf("Keep: %v", err)
 	}
@@ -663,6 +674,7 @@ func TestTrash_ListsTrashedPostsMostRecentlyTrashedFirst(t *testing.T) {
 	if err := app.states.Trash(ctx, app.userID, first, service.PlaceQueue); err != nil {
 		t.Fatalf("Trash: %v", err)
 	}
+	app.clock.Advance(time.Second)
 	app.archive(t, second)
 	if err := app.states.Trash(ctx, app.userID, second, service.PlaceArchive); err != nil {
 		t.Fatalf("Trash: %v", err)
@@ -977,7 +989,8 @@ func TestQueue_OpeningTheQueueChecksInTheBackgroundAfterTheFirstCard(t *testing.
 // gator records when it fetched a Post to the second, so a check in the same
 // second as the page load must still put what it fetches behind the chip.
 func TestQueue_ACheckRightAfterThePageLoadsKeepsTheCardStill(t *testing.T) {
-	app := newTestApp(t)
+	// The system clock, which the database's fetch times share.
+	app := newTestAppOn(t, clock.New())
 	app.serveFeed(t)
 	page := app.request(t, http.MethodGet, "/", nil).Body.String()
 	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
