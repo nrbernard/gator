@@ -89,7 +89,7 @@ func newTestApp(t *testing.T) *testApp {
 	feeds := &service.FeedService{Repo: queries}
 	Register(app.e, Handlers{
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
-		ReadingList: &ReadingListHandler{PostService: posts},
+		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
 		Post:        &PostHandler{PostService: posts},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
 	})
@@ -225,6 +225,99 @@ func TestReadingList_ListsKeptPosts(t *testing.T) {
 
 	assertContains(t, body, "Kept post", "Example Feed", "http://example.com/posts/"+kept.String())
 	assertNotContains(t, body, "Trashed post", "Queue post")
+}
+
+func TestReadingList_EachPostOffersOpenReadAndTrashOverHtmx(t *testing.T) {
+	app := newTestApp(t)
+	kept := app.post(t, "Kept post", "", time.Now())
+	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/reading-list", nil).Body.String()
+
+	id := kept.String()
+	assertContains(t, body, `id="reading-list"`, "htmx",
+		`hx-post="/reading-list/`+id+`/open"`, `hx-post="/reading-list/`+id+`/read"`, `hx-post="/reading-list/`+id+`/trash"`,
+		">Mark read<")
+}
+
+func TestReadingList_ActionsUpdateTheListInPlace(t *testing.T) {
+	tests := []struct {
+		action   string
+		want     service.PostState
+		wantBody []string
+		unwanted []string
+	}{
+		// A read Post stays on the Reading list, offering to mark it unread.
+		{"open", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
+		{"read", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
+		{"trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceReadingList}, nil, []string{"Acted on"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			app := newTestApp(t)
+			ctx := context.Background()
+			other := app.post(t, "Other kept post", "", time.Now())
+			acted := app.post(t, "Acted on", "", time.Now())
+			for _, id := range []uuid.UUID{other, acted} {
+				if err := app.states.Keep(ctx, app.userID, id); err != nil {
+					t.Fatalf("Keep: %v", err)
+				}
+			}
+
+			body := app.request(t, http.MethodPost, "/reading-list/"+acted.String()+"/"+tc.action, nil).Body.String()
+
+			got, err := app.states.State(ctx, app.userID, acted)
+			if err != nil {
+				t.Fatalf("State: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("state = %+v, want %+v", got, tc.want)
+			}
+			assertContains(t, body, append([]string{`id="reading-list"`, "Other kept post"}, tc.wantBody...)...)
+			assertNotContains(t, body, append([]string{"<html"}, tc.unwanted...)...)
+		})
+	}
+}
+
+func TestReadingList_ReadTogglesBackToUnread(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	kept := app.post(t, "Opened by accident", "", time.Now())
+	if err := app.states.Keep(ctx, app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+	if err := app.states.Open(ctx, app.userID, kept); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	body := app.request(t, http.MethodPost, "/reading-list/"+kept.String()+"/read", nil).Body.String()
+
+	got, err := app.states.State(ctx, app.userID, kept)
+	if err != nil {
+		t.Fatalf("State: %v", err)
+	}
+	if got.Read {
+		t.Errorf("post is still read")
+	}
+	assertContains(t, body, "Opened by accident", ">Mark read<")
+}
+
+func TestReadingList_RejectsActionsOnAPostNotOnTheReadingList(t *testing.T) {
+	app := newTestApp(t)
+	queued := app.post(t, "Queue post", "", time.Now())
+
+	for _, action := range []string{"read", "trash"} {
+		rec := httptest.NewRecorder()
+		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/reading-list/"+queued.String()+"/"+action, nil))
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("%s: status = %d, want %d", action, rec.Code, http.StatusConflict)
+		}
+	}
+	app.assertPlace(t, queued, service.PlaceQueue)
 }
 
 func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {

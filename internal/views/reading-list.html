@@ -1,0 +1,40 @@
+{{/* The Reading list: unread Posts first, then most recently kept. Each
+     per-Post action responds with this block for htmx to swap in place. */}}
+{{ block "reading-list" . }}
+<section id="reading-list">
+  {{ if . }}
+    <ul class="space-y-4">
+      {{ range . }}
+        {{ template "reading-list-item" . }}
+      {{ end }}
+    </ul>
+  {{ else }}
+    <p class="text-gray-600 py-8">Nothing on the Reading list. Keep Posts from the <a href="/" class="text-blue-600 hover:text-blue-800">Queue</a>.</p>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ block "reading-list-item" . }}
+<li id="post-{{ .ID }}" class="border-b border-neutral-200 pb-4">
+  <div class="flex justify-between text-sm text-gray-600 mb-1">
+    <span>{{ .FeedName }}</span>
+    <span>{{ .PublishedAt.Format "January 2, 2006" }}{{ if .IsRead }} · Read{{ end }}</span>
+  </div>
+  {{/* Open: the link opens the Post in a new tab, and the click bubbles to
+       the span, which marks it Read. */}}
+  <span hx-post="/reading-list/{{ .ID }}/open" hx-trigger="click" hx-target="#reading-list" hx-swap="outerHTML">
+    <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold {{ if .IsRead }}text-gray-500{{ else }}text-gray-900{{ end }} hover:text-blue-600">{{ .Title }}</a>
+  </span>
+  {{ template "reading-list-actions" . }}
+</li>
+{{ end }}
+
+{{/* One button per move from the Reading list. */}}
+{{ block "reading-list-actions" . }}
+<div class="flex gap-2 mt-2 text-sm">
+  <button hx-post="/reading-list/{{ .ID }}/read" hx-target="#reading-list" hx-swap="outerHTML"
+    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">{{ if .IsRead }}Mark unread{{ else }}Mark read{{ end }}</button>
+  <button hx-post="/reading-list/{{ .ID }}/trash" hx-target="#reading-list" hx-swap="outerHTML"
+    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
+</div>
+{{ end }}

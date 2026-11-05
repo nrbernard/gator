@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Gator is a simple RSS feed reader" />
     <title>Reading list - Gator</title>
+    <script src="https://unpkg.com/htmx.org/dist/htmx.js"></script>
     <link href="/static/css/output.css" rel="stylesheet">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐊</text></svg>">
   </head>
@@ -14,21 +15,7 @@
 
         <h2 class="text-2xl font-semibold text-gray-900 mb-6">Reading list</h2>
 
-        {{ if .Posts }}
-          <ul class="space-y-4">
-            {{ range .Posts }}
-              <li class="border-b border-neutral-200 pb-4">
-                <div class="flex justify-between text-sm text-gray-600 mb-1">
-                  <span>{{ .FeedName }}</span>
-                  <span>{{ .PublishedAt.Format "January 2, 2006" }}{{ if .IsRead }} · Read{{ end }}</span>
-                </div>
-                <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
-              </li>
-            {{ end }}
-          </ul>
-        {{ else }}
-          <p class="text-gray-600 py-8">Nothing on the Reading list. Keep Posts from the <a href="/" class="text-blue-600 hover:text-blue-800">Queue</a>.</p>
-        {{ end }}
+        {{ template "reading-list" .Posts }}
     </main>
   </body>
 </html>
