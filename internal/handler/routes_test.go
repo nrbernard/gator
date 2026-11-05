@@ -227,7 +227,7 @@ func TestReadingList_ListsKeptPosts(t *testing.T) {
 	assertNotContains(t, body, "Trashed post", "Queue post")
 }
 
-func TestReadingList_EachPostOffersOpenReadAndTrashOverHtmx(t *testing.T) {
+func TestReadingList_EachPostOffersOpenReadArchiveAndTrashOverHtmx(t *testing.T) {
 	app := newTestApp(t)
 	kept := app.post(t, "Kept post", "", time.Now())
 	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
@@ -238,7 +238,8 @@ func TestReadingList_EachPostOffersOpenReadAndTrashOverHtmx(t *testing.T) {
 
 	id := kept.String()
 	assertContains(t, body, `id="reading-list"`, "htmx",
-		`hx-post="/reading-list/`+id+`/open"`, `hx-post="/reading-list/`+id+`/read"`, `hx-post="/reading-list/`+id+`/trash"`,
+		`hx-post="/reading-list/`+id+`/open"`, `hx-post="/reading-list/`+id+`/read"`,
+		`hx-post="/reading-list/`+id+`/archive"`, `hx-post="/reading-list/`+id+`/trash"`,
 		">Mark read<")
 }
 
@@ -252,6 +253,7 @@ func TestReadingList_ActionsUpdateTheListInPlace(t *testing.T) {
 		// A read Post stays on the Reading list, offering to mark it unread.
 		{"open", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
 		{"read", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
+		{"archive", service.PostState{Place: service.PlaceArchive}, nil, []string{"Acted on"}},
 		{"trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceReadingList}, nil, []string{"Acted on"}},
 	}
 
@@ -309,7 +311,7 @@ func TestReadingList_RejectsActionsOnAPostNotOnTheReadingList(t *testing.T) {
 	app := newTestApp(t)
 	queued := app.post(t, "Queue post", "", time.Now())
 
-	for _, action := range []string{"read", "trash"} {
+	for _, action := range []string{"read", "archive", "trash"} {
 		rec := httptest.NewRecorder()
 		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/reading-list/"+queued.String()+"/"+action, nil))
 

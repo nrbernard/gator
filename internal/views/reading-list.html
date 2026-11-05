@@ -34,6 +34,8 @@
 <div class="flex gap-2 mt-2 text-sm">
   <button hx-post="/reading-list/{{ .ID }}/read" hx-target="#reading-list" hx-swap="outerHTML"
     class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">{{ if .IsRead }}Mark unread{{ else }}Mark read{{ end }}</button>
+  <button hx-post="/reading-list/{{ .ID }}/archive" hx-target="#reading-list" hx-swap="outerHTML"
+    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Archive</button>
   <button hx-post="/reading-list/{{ .ID }}/trash" hx-target="#reading-list" hx-swap="outerHTML"
     class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
 </div>

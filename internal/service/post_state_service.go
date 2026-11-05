@@ -88,6 +88,20 @@ func (s *PostStateService) ToggleRead(ctx context.Context, userID, postID uuid.U
 	})
 }
 
+// Archive moves a Reading list Post, finished with, to the Archive.
+func (s *PostStateService) Archive(ctx context.Context, userID, postID uuid.UUID) error {
+	return s.move(ctx, userID, postID, "archive", []Place{PlaceReadingList}, func(current PostState) PostState {
+		return PostState{Place: PlaceArchive, Read: current.Read}
+	})
+}
+
+// Unarchive moves an archived Post back to the Reading list, to reread it.
+func (s *PostStateService) Unarchive(ctx context.Context, userID, postID uuid.UUID) error {
+	return s.move(ctx, userID, postID, "unarchive", []Place{PlaceArchive}, func(current PostState) PostState {
+		return PostState{Place: PlaceReadingList, Read: current.Read}
+	})
+}
+
 // move applies to to the Post's current state, provided the Post is in one of
 // the from Places. The Read mark's original time survives a move that keeps it.
 func (s *PostStateService) move(ctx context.Context, userID, postID uuid.UUID, name string, from []Place, to func(PostState) PostState) error {
