@@ -65,7 +65,8 @@ func (s *PostService) CountQueueCreatedBy(ctx context.Context, userID uuid.UUID,
 	return int(n), nil
 }
 
-// ReadingList returns the user's kept Posts, most recently kept first.
+// ReadingList returns the user's kept Posts, unread first, then most recently
+// kept first.
 func (s *PostService) ReadingList(ctx context.Context, userID uuid.UUID) ([]models.Post, error) {
 	rows, err := s.Repo.GetReadingListPosts(ctx, userID.String())
 	if err != nil {
