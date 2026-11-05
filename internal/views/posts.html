@@ -33,22 +33,34 @@
   </div>
 {{ end }}
 
-{{/* Search matches Posts in every Place; results have no actions yet. */}}
+{{/* Search matches Posts in every Place. Each result is labelled with its
+     Place and offers that Place's actions. */}}
 {{ block "search-results" . }}
-<div id="search-results" class="space-y-4">
+<div id="search-results">
   {{ if .Query }}
-    {{ range .Posts }}
-      <div class="border-b border-neutral-200 pb-4">
-        <div class="flex justify-between text-sm text-gray-600 mb-1">
-          <span>{{ .FeedName }}</span>
-          <span>{{ .PublishedAt.Format "January 2, 2006" }}</span>
-        </div>
-        <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
-        <p class="text-gray-700 line-clamp-3">{{ .Description }}</p>
-      </div>
+    {{ if .Posts }}
+      <ul class="space-y-4">
+        {{ range .Posts }}
+          {{ template "search-result" . }}
+        {{ end }}
+      </ul>
     {{ else }}
       <p class="text-gray-600 text-center py-8">No posts found for "{{ .Query }}".</p>
     {{ end }}
   {{ end }}
 </div>
+{{ end }}
+
+{{/* One search result. An action on it responds with this block, re-rendered
+     with the Post's new Place, for htmx to swap in place. */}}
+{{ block "search-result" . }}
+<li id="search-result-{{ .ID }}" class="border-b border-neutral-200 pb-4">
+  <div class="flex justify-between text-sm text-gray-600 mb-1">
+    <span>{{ .FeedName }}</span>
+    <span>{{ .PublishedAt.Format "January 2, 2006" }}{{ if .IsRead }} · Read{{ end }}</span>
+  </div>
+  <span class="inline-block text-xs uppercase tracking-wide text-gray-500 mb-1">{{ .Place.Label }}</span>
+  <a href="{{ .Link }}" target="_blank" rel="noopener" class="block text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
+  <p class="text-gray-700 line-clamp-3">{{ .Description }}</p>
+</li>
 {{ end }}

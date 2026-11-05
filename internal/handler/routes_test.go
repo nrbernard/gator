@@ -656,24 +656,52 @@ func TestNav_LinksToTheArchiveFromEveryScreen(t *testing.T) {
 	}
 }
 
-func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {
+// searchResult is the markup of one search result, from its opening tag to its
+// close, failing the test if the response has no result for the Post.
+func searchResult(t *testing.T, body string, postID uuid.UUID) string {
+	t.Helper()
+	start := strings.Index(body, `id="search-result-`+postID.String()+`"`)
+	if start < 0 {
+		t.Fatalf("no search result for %s; body:\n%s", postID, body)
+	}
+	end := strings.Index(body[start:], "</li>")
+	if end < 0 {
+		t.Fatalf("search result for %s is not closed; body:\n%s", postID, body)
+	}
+	return body[start : start+end]
+}
+
+func TestSearch_FindsPostsInEveryPlaceLabelledWithTheirPlace(t *testing.T) {
 	app := newTestApp(t)
 	ctx := context.Background()
-	app.post(t, "Needle in the title", "", time.Now())
+	queued := app.post(t, "Needle in the title", "", time.Now())
 	kept := app.post(t, "Kept post", "a needle in the description", time.Now())
+	archived := app.post(t, "Archived needle", "", time.Now())
 	trashed := app.post(t, "Trashed needle", "", time.Now())
 	app.post(t, "Haystack", "", time.Now())
 	if err := app.states.Keep(ctx, app.userID, kept); err != nil {
 		t.Fatalf("Keep: %v", err)
 	}
+	app.archive(t, archived)
 	if err := app.states.Trash(ctx, app.userID, trashed, service.PlaceQueue); err != nil {
 		t.Fatalf("Trash: %v", err)
 	}
 
 	body := app.request(t, http.MethodPost, "/search", strings.NewReader("search=needle")).Body.String()
 
-	assertContains(t, body, "Needle in the title", "Kept post", "Trashed needle")
-	assertNotContains(t, body, "Haystack", "<button", "/saved-posts/", "/read-posts/")
+	assertNotContains(t, body, "Haystack")
+	for _, tc := range []struct {
+		id    uuid.UUID
+		title string
+		place string
+	}{
+		{queued, "Needle in the title", "Queue"},
+		{kept, "Kept post", "Reading list"},
+		{archived, "Archived needle", "Archive"},
+		{trashed, "Trashed needle", "Trash"},
+	} {
+		assertContains(t, searchResult(t, body, tc.id), tc.title, ">"+tc.place+"<")
+	}
 }
 
 func TestQueue_RefreshFetchesFeedsAndRespondsWithTheQueue(t *testing.T) {

@@ -91,8 +91,11 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 }
 
 const searchPostsByUser = `-- name: SearchPostsByUser :many
-SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id FROM posts
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id,
+       post_states.place, post_states.read_at
+FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
+LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id = ?1
 WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
 AND ( posts.title LIKE '%' || CAST(?2 AS TEXT) || '%'
       OR posts.description LIKE '%' || CAST(?2 AS TEXT) || '%'
@@ -114,8 +117,11 @@ type SearchPostsByUserRow struct {
 	PublishedAt time.Time
 	FeedName    string
 	FeedID      string
+	Place       sql.NullString
+	ReadAt      sql.NullTime
 }
 
+// Posts in every Place; a NULL place means the Post is in the Queue.
 func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPostsByUser, arg.UserID, arg.SearchText, arg.LimitCount)
 	if err != nil {
@@ -133,6 +139,8 @@ func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserPa
 			&i.PublishedAt,
 			&i.FeedName,
 			&i.FeedID,
+			&i.Place,
+			&i.ReadAt,
 		); err != nil {
 			return nil, err
 		}

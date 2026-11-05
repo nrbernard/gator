@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/nrbernard/gator/internal/models"
 	"github.com/nrbernard/gator/internal/service"
 )
 
@@ -20,7 +19,7 @@ func (h *PostHandler) Search(c echo.Context) error {
 	}
 	query := c.FormValue("search")
 
-	var posts []models.Post
+	var posts []service.SearchResult
 	if query != "" {
 		posts, err = h.PostService.SearchPosts(c.Request().Context(), userID, query)
 		if err != nil {
