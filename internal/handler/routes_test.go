@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -99,6 +100,7 @@ func newTestApp(t *testing.T) *testApp {
 		Trash:       &TrashHandler{PostService: posts, StateService: app.states},
 		Post:        &PostHandler{PostService: posts, StateService: app.states},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
+		StaticDir:   "../../static",
 	})
 	return app
 }
@@ -275,7 +277,7 @@ func TestQueue_TrashAllAsksFirstWithTheNumberOfPostsItWillTrash(t *testing.T) {
 	if got := pageCutoff(t, cancelled); got != cutoff {
 		t.Errorf("cancel moved the cutoff from %s to %s", cutoff, got)
 	}
-	assertContains(t, cancelled, `id="queue"`, "3 left")
+	assertContains(t, cancelled, `id="queue"`, "2 left", ">1 new<")
 }
 
 func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
@@ -293,8 +295,96 @@ func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
 	app.assertPlace(t, first, service.PlaceTrash)
 	app.assertPlace(t, second, service.PlaceTrash)
 	app.assertPlace(t, unseen, service.PlaceQueue)
-	assertContains(t, body, `id="queue"`, "Fetched after the page loaded", "1 left")
-	assertNotContains(t, body, "<html")
+	assertContains(t, body, `id="queue"`, "caught up", ">1 new<")
+	assertNotContains(t, body, "<html", "Fetched after the page loaded")
+}
+
+// fetchedAt sets when gator fetched the Post.
+func (a *testApp) fetchedAt(t *testing.T, postID uuid.UUID, at time.Time) {
+	t.Helper()
+	if _, err := a.db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", at.UTC().Format(time.DateTime), postID.String()); err != nil {
+		t.Fatalf("set created_at: %v", err)
+	}
+}
+
+func cutoffQuery(cutoff time.Time) string {
+	return "cutoff=" + url.QueryEscape(cutoff.UTC().Format(time.RFC3339Nano))
+}
+
+func TestQueue_PostsFetchedAfterThePageLoadedWaitBehindTheChip(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	pageLoad := now.Add(-time.Minute)
+	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
+	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
+	app.post(t, "New post", "", now)
+
+	body := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+
+	assertContains(t, body, "Shown post", "1 left", ">1 new<")
+	assertNotContains(t, body, "New post")
+}
+
+var chipPattern = regexp.MustCompile(`hx-get="/queue/card" hx-vals='\{"cutoff":\s*"([^"]+)"\}'`)
+
+// chipCutoff is the cutoff tapping the chip moves the page to.
+func chipCutoff(t *testing.T, body string) string {
+	t.Helper()
+	m := chipPattern.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("response has no chip; body:\n%s", body)
+	}
+	return m[1]
+}
+
+func TestQueue_TappingTheChipMovesTheCutoffAndShowsTheNewPosts(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	pageLoad := now.Add(-time.Minute)
+	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
+	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
+	app.post(t, "New post", "", now)
+	card := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+
+	tapped := chipCutoff(t, card)
+	body := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(tapped), nil).Body.String()
+
+	if got := pageCutoff(t, body); got != tapped {
+		t.Errorf("cutoff = %s, want the chip's %s", got, tapped)
+	}
+	assertContains(t, body, "New post", "2 left")
+	assertNotContains(t, body, "Shown post", " new<")
+}
+
+func TestQueue_TrashAllAfterTappingTheChipTrashesWhatItRevealed(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	pageLoad := now.Add(-time.Minute)
+	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
+	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
+	revealed := app.post(t, "Revealed post", "", now)
+	card := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+	tapped := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(chipCutoff(t, card)), nil).Body.String()
+	since := app.post(t, "Fetched since the tap", "", now)
+	app.fetchedAfterPageLoad(t, since)
+
+	form := url.Values{"cutoff": {pageCutoff(t, tapped)}}.Encode()
+	body := app.request(t, http.MethodPost, "/queue/trash-all", strings.NewReader(form)).Body.String()
+
+	app.assertPlace(t, shown, service.PlaceTrash)
+	app.assertPlace(t, revealed, service.PlaceTrash)
+	app.assertPlace(t, since, service.PlaceQueue)
+	assertContains(t, body, "caught up", ">1 new<")
+}
+
+func TestQueue_WithNoNewPostsThereIsNoChip(t *testing.T) {
+	app := newTestApp(t)
+	app.post(t, "A post", "", time.Now())
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	assertContains(t, body, "A post", "1 left")
+	assertNotContains(t, body, " new<")
 }
 
 func TestQueue_TrashAllWithoutACutoffTrashesNothing(t *testing.T) {
@@ -701,7 +791,7 @@ func TestSearch_FindsPostsInEveryPlaceLabelledWithTheirPlace(t *testing.T) {
 		{archived, "Archived needle", "Archive"},
 		{trashed, "Trashed needle", "Trash"},
 	} {
-		assertContains(t, searchResult(t, body, tc.id), tc.title, ">"+tc.place+"<")
+		assertContains(t, searchResult(t, body, tc.id), tc.title, `class="place-label">`+tc.place+"<")
 	}
 }
 
@@ -814,20 +904,24 @@ func TestSearch_AnActionMovesThePostAndUpdatesTheResultInPlace(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("state = %+v, want %+v", got, tc.want)
 			}
-			assertContains(t, searchResult(t, body, acted), "Acted-on needle", ">"+tc.wantLabel+"<")
+			assertContains(t, searchResult(t, body, acted), "Acted-on needle", `class="place-label">`+tc.wantLabel+"<")
 			assertNotContains(t, body, "<html", "Other needle", `id="search-results"`)
 		})
 	}
 }
 
-func TestQueue_RefreshFetchesFeedsAndRespondsWithTheQueue(t *testing.T) {
-	app := newTestApp(t)
+// serveFeed follows a Feed served with one item, "Freshly fetched", and
+// returns how many times it has been fetched. The fixture Feed's URL isn't
+// served, so it is marked fetched for the scrape to skip it.
+func (a *testApp) serveFeed(t *testing.T) *atomic.Int32 {
+	t.Helper()
 	ctx := context.Background()
-	// The fixture Feed's URL isn't served; mark it fetched so Refresh skips it.
-	if err := app.queries.MarkFeedAsFetched(ctx, app.feedID.String()); err != nil {
+	if err := a.queries.MarkFeedAsFetched(ctx, a.feedID.String()); err != nil {
 		t.Fatalf("MarkFeedAsFetched: %v", err)
 	}
+	var fetches atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetches.Add(1)
 		w.Header().Set("Content-Type", "application/rss+xml")
 		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Served Feed</title><link>http://example.com</link><description>d</description>
@@ -836,16 +930,64 @@ func TestQueue_RefreshFetchesFeedsAndRespondsWithTheQueue(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	servedID := uuid.NewString()
-	if _, err := app.queries.CreateFeed(ctx, database.CreateFeedParams{ID: servedID, Name: "Served Feed", Url: server.URL, UserID: app.userID.String()}); err != nil {
+	if _, err := a.queries.CreateFeed(ctx, database.CreateFeedParams{ID: servedID, Name: "Served Feed", Url: server.URL, UserID: a.userID.String()}); err != nil {
 		t.Fatalf("create feed: %v", err)
 	}
-	if _, err := app.queries.CreateFeedFollow(ctx, database.CreateFeedFollowParams{ID: uuid.NewString(), UserID: app.userID.String(), FeedID: servedID}); err != nil {
+	if _, err := a.queries.CreateFeedFollow(ctx, database.CreateFeedFollowParams{ID: uuid.NewString(), UserID: a.userID.String(), FeedID: servedID}); err != nil {
 		t.Fatalf("follow feed: %v", err)
 	}
+	return &fetches
+}
 
-	body := app.request(t, http.MethodPost, "/queue/refresh", nil).Body.String()
+func TestQueue_OpeningTheQueueChecksInTheBackgroundAfterTheFirstCard(t *testing.T) {
+	app := newTestApp(t)
+	fetches := app.serveFeed(t)
+	app.post(t, "A post", "", time.Now())
 
-	assertContains(t, body, `id="queue"`, "Freshly fetched", "Served Feed", "1 left")
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	if fetches.Load() != 0 {
+		t.Errorf("loading the page fetched the served feed %d times, want 0", fetches.Load())
+	}
+	assertContains(t, body, "A post", `hx-post="/queue/check" hx-trigger="load"`, ">Check now<")
+	assertNotContains(t, body, "Refresh", "/queue/refresh")
+}
+
+// gator records when it fetched a Post to the second, so a check in the same
+// second as the page load must still put what it fetches behind the chip.
+func TestQueue_ACheckRightAfterThePageLoadsKeepsTheCardStill(t *testing.T) {
+	app := newTestApp(t)
+	app.serveFeed(t)
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
+
+	chip := app.request(t, http.MethodPost, "/queue/check", strings.NewReader(form)).Body.String()
+	card := app.request(t, http.MethodGet, "/queue/card?"+form, nil).Body.String()
+
+	assertContains(t, chip, ">1 new<")
+	assertContains(t, card, "caught up")
+	assertNotContains(t, card, "Freshly fetched")
+}
+
+func TestQueue_CheckNowFetchesFeedsAndCountsThePostsBehindTheChip(t *testing.T) {
+	app := newTestApp(t)
+	fetches := app.serveFeed(t)
+	pageLoad := time.Now().Add(-time.Minute)
+
+	form := url.Values{"cutoff": {pageLoad.UTC().Format(time.RFC3339Nano)}}.Encode()
+	body := app.request(t, http.MethodPost, "/queue/check", strings.NewReader(form)).Body.String()
+
+	if fetches.Load() != 1 {
+		t.Errorf("served feed fetched %d times, want 1", fetches.Load())
+	}
+	assertContains(t, body, `id="queue-new"`, ">1 new<")
+	assertNotContains(t, body, `id="queue"`, "Freshly fetched")
+
+	rec := httptest.NewRecorder()
+	app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/queue/refresh", nil))
+	if rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /queue/refresh: status %d, want the route gone", rec.Code)
+	}
 }
 
 func TestQueue_HasNoTabsOrToggleButtons(t *testing.T) {

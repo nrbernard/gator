@@ -39,7 +39,6 @@ func main() {
 	e := echo.New()
 	e.Renderer = newTemplate()
 	e.Use(echoMiddleware.Logger())
-	e.Static("/static", "static")
 
 	dbPath := os.Getenv("DATABASE_PATH")
 	db, err := sql.Open("sqlite3", dbPath)
@@ -70,6 +69,7 @@ func main() {
 		Trash:       &handler.TrashHandler{PostService: postService, StateService: stateService},
 		Post:        &handler.PostHandler{PostService: postService, StateService: stateService},
 		Feed:        feedHandler,
+		StaticDir:   "static",
 	})
 
 	if err := e.Start(":8080"); err != nil {

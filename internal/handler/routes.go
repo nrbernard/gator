@@ -14,15 +14,19 @@ type Handlers struct {
 	Trash       *TrashHandler
 	Post        *PostHandler
 	Feed        *FeedHandler
+	// StaticDir is the directory served at /static: fonts, scripts, and the Tailwind build.
+	StaticDir string
 }
 
 // Register adds the app's routes to e.
 func Register(e *echo.Echo, h Handlers) {
+	e.Static("/static", h.StaticDir)
+
 	e.GET("/", h.Queue.Index)
 	e.GET("/posts", func(c echo.Context) error {
 		return c.Redirect(http.StatusMovedPermanently, "/")
 	})
-	e.POST("/queue/refresh", h.Queue.Refresh)
+	e.POST("/queue/check", h.Queue.Check)
 	e.GET("/queue/card", h.Queue.Card)
 	e.GET("/queue/trash-all", h.Queue.ConfirmTrashAll)
 	e.POST("/queue/trash-all", h.Queue.TrashAll)

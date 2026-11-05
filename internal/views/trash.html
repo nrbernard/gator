@@ -3,32 +3,36 @@
 {{ block "trash" . }}
 <section id="trash">
   {{ if . }}
-    <ul class="space-y-4">
+    <ul class="post-list">
       {{ range . }}
         {{ template "trash-item" . }}
       {{ end }}
     </ul>
   {{ else }}
-    <p class="text-gray-600 py-8">Nothing in the Trash.</p>
+    <div class="empty-state">
+      <div class="empty-state-icon">{{ template "icon-trash-2" "size-5" }}</div>
+      <h2 class="mt-5 text-xl font-semibold">Nothing in the Trash</h2>
+      <p class="mt-1.5 text-sm text-white/60">Anything you trash waits here, and can be restored to where it came from.</p>
+    </div>
   {{ end }}
 </section>
 {{ end }}
 
 {{ block "trash-item" . }}
-<li id="post-{{ .ID }}" class="border-b border-neutral-200 pb-4">
-  <div class="flex justify-between text-sm text-gray-600 mb-1">
-    <span>{{ .FeedName }}</span>
-    <span>{{ .PublishedAt.Format "January 2, 2006" }}</span>
+<li id="post-{{ .ID }}" class="post-row">
+  <div class="min-w-0 flex-1">
+    <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time></p>
+    <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+    {{ template "trash-actions" . }}
   </div>
-  <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
-  {{ template "trash-actions" . }}
 </li>
 {{ end }}
 
 {{/* One button per move from the Trash. */}}
 {{ block "trash-actions" . }}
-<div class="flex gap-2 mt-2 text-sm">
-  <button hx-post="/trash/{{ .ID }}/restore" hx-target="#trash" hx-swap="outerHTML"
-    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Restore</button>
+<div class="row-actions">
+  <button hx-post="/trash/{{ .ID }}/restore" hx-target="#trash" hx-swap="outerHTML" class="row-action">
+    {{ template "icon-undo-2" "size-3.5" }}<span>Restore</span>
+  </button>
 </div>
 {{ end }}
