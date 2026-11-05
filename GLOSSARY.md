@@ -8,9 +8,17 @@ A single-person RSS reader built around triage: every new post is either kept fo
 An RSS or Atom source the user subscribes to.
 _Avoid_: Source, subscription, channel
 
+**Remove a Feed**:
+To stop following a Feed. gator no longer fetches or lists it, and its Queue Posts leave the Queue, but its Posts on the Reading list, in the Archive, or in the Trash stay. Adding its URL again brings it back.
+_Avoid_: Delete, unsubscribe, unfollow
+
 **Post**:
-One item published by a Feed. Every Post is in exactly one of the Queue, the Reading list, the Archive, or the Trash.
+One item published by a Feed. Every Post is in exactly one Place.
 _Avoid_: Article, item, entry, story
+
+**Place**:
+Where a Post is: the Queue, the Reading list, the Archive, or the Trash. A Post is in exactly one Place at a time.
+_Avoid_: State, status, folder, location
 
 ## Triage
 
@@ -26,8 +34,20 @@ _Avoid_: Sorting, review
 To move a Post from the Queue to the Reading list.
 _Avoid_: Save, like, favourite, bookmark
 
+**Open**:
+To click through to a Post's site from the Queue or the Reading list. Opening a Queue Post Keeps it marked Read; opening a Reading list Post marks it Read.
+_Avoid_: View, visit, read (as the action)
+
+**Cutoff**:
+The moment up to which a Queue page shows Posts: the end of the last complete second when the page loaded, or when the user last tapped the New-posts chip. Posts gator fetched after it are new; trash all trashes only Posts fetched by it.
+_Avoid_: Timestamp, since, watermark
+
+**New-posts chip**:
+The "N new" chip on the Queue counting the Posts fetched after the cutoff. Tapping it moves the cutoff forward and shows them, so the card never changes under the user.
+_Avoid_: Badge, notification, banner
+
 **Trash**:
-The Posts the user has thrown away, which can still be restored to wherever they came from; as a verb, to move a Post there. Nothing in the Trash is ever purged.
+The Posts the user has thrown away, which can still be restored to wherever they came from, except a Post trashed from the Queue whose Feed has since been removed; as a verb, to move a Post there. Nothing in the Trash is ever purged.
 _Avoid_: Delete, dismiss, discard, skip
 
 ## Reading

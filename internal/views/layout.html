@@ -63,7 +63,7 @@
 {{/* "menu-links" takes the current page's title and marks that link. A page's own actions
      go after them, below a <div class="menu-separator">, as .menu-item buttons. */}}
 {{ define "menu-links" }}
-<a href="/" class="menu-item"{{ if eq . "Queue" }} aria-current="page"{{ end }}>{{ template "icon-inbox" "size-4" }}Queue</a>
+<a href="/" class="menu-item"{{ if eq . "Queue" }} aria-current="page"{{ end }}>{{ template "icon-layers" "size-4" }}Queue</a>
 <a href="/reading-list" class="menu-item"{{ if eq . "Reading list" }} aria-current="page"{{ end }}>{{ template "icon-book-open" "size-4" }}Reading list</a>
 <a href="/archive" class="menu-item"{{ if eq . "Archive" }} aria-current="page"{{ end }}>{{ template "icon-archive" "size-4" }}Archive</a>
 <a href="/trash" class="menu-item"{{ if eq . "Trash" }} aria-current="page"{{ end }}>{{ template "icon-trash-2" "size-4" }}Trash</a>
