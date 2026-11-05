@@ -78,10 +78,12 @@
     <button hx-post="/search/{{ .ID }}/unarchive" class="row-action">
       {{ template "icon-archive-restore" "size-3.5" }}<span>Move to Reading list</span>
     </button>
-  {{ else if eq .Place "trash" }}
+  {{ else if and (eq .Place "trash") .Restorable }}
     <button hx-post="/search/{{ .ID }}/restore" class="row-action">
       {{ template "icon-undo-2" "size-3.5" }}<span>Restore</span>
     </button>
+  {{ else if eq .Place "trash" }}
+    <span class="row-note">Feed removed</span>
   {{ end }}
   {{ if ne .Place "trash" }}
     <button hx-post="/search/{{ .ID }}/trash" hx-vals='{"from": "{{ .Place }}"}' class="row-action row-action-danger">

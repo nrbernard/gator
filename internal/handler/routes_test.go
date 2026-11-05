@@ -765,13 +765,20 @@ func TestSearch_HasItsOwnPageLinkedFromEveryScreen(t *testing.T) {
 // close, failing the test if the response has no result for the Post.
 func searchResult(t *testing.T, body string, postID uuid.UUID) string {
 	t.Helper()
-	start := strings.Index(body, `id="search-result-`+postID.String()+`"`)
+	return listItem(t, body, `id="search-result-`+postID.String()+`"`)
+}
+
+// listItem is the markup of the list item with the id attribute idAttr, from
+// that attribute to the item's close, failing the test if there is none.
+func listItem(t *testing.T, body, idAttr string) string {
+	t.Helper()
+	start := strings.Index(body, idAttr)
 	if start < 0 {
-		t.Fatalf("no search result for %s; body:\n%s", postID, body)
+		t.Fatalf("no list item with %s; body:\n%s", idAttr, body)
 	}
 	end := strings.Index(body[start:], "</li>")
 	if end < 0 {
-		t.Fatalf("search result for %s is not closed; body:\n%s", postID, body)
+		t.Fatalf("list item with %s is not closed; body:\n%s", idAttr, body)
 	}
 	return body[start : start+end]
 }

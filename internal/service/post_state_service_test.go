@@ -348,6 +348,38 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	}
 }
 
+// A removed Feed's Posts are out of the Queue, so a Post restored there would
+// be lost; one trashed from elsewhere still goes back.
+func TestPostStateService_RestoreOfARemovedFeedsPostOnlyLeavesTheTrashIfNotForTheQueue(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	fromQueue := f.post(t, "Trashed from the Queue", time.Now())
+	fromReadingList := f.post(t, "Trashed from the Reading list", time.Now())
+	if err := s.Trash(ctx, f.userID, fromQueue, PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	if err := s.Keep(ctx, f.userID, fromReadingList); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+	if err := s.Trash(ctx, f.userID, fromReadingList, PlaceReadingList); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	if err := (&FeedService{Repo: f.queries}).RemoveFeed(ctx, f.feedID); err != nil {
+		t.Fatalf("RemoveFeed: %v", err)
+	}
+
+	if err := s.Restore(ctx, f.userID, fromQueue); !errors.Is(err, ErrInvalidMove) {
+		t.Errorf("restore to the Queue: err = %v, want ErrInvalidMove", err)
+	}
+	if err := s.Restore(ctx, f.userID, fromReadingList); err != nil {
+		t.Errorf("restore to the Reading list: %v", err)
+	}
+
+	assertState(t, s, f.userID, fromQueue, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
+	assertState(t, s, f.userID, fromReadingList, PostState{Place: PlaceReadingList})
+}
+
 func TestPostStateService_RejectsMovesOfAMissingPost(t *testing.T) {
 	f := newFixture(t, setupTestDB(t))
 	s := &PostStateService{Repo: f.queries}

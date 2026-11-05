@@ -1,7 +1,9 @@
 -- name: GetPostState :one
 -- One row per existing Post; NULL place means the Post is in the user's Queue.
-SELECT posts.id AS post_id, post_states.place, post_states.trashed_from, post_states.read_at
+SELECT posts.id AS post_id, post_states.place, post_states.trashed_from, post_states.read_at,
+       feeds.removed_at AS feed_removed_at
 FROM posts
+JOIN feeds ON feeds.id = posts.feed_id
 LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id = @user_id
 WHERE posts.id = @post_id;
 
@@ -77,7 +79,8 @@ AND datetime(posts.created_at) <= datetime(@cutoff);
 -- The Posts in the Reading list, the Archive, or the Trash, most recently
 -- moved there first (changed_at is when the Post entered its Place); on the
 -- Reading list, unread first.
-SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
+SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at,
+       post_states.trashed_from, feeds.removed_at AS feed_removed_at
 FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id

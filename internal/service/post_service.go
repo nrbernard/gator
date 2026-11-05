@@ -121,6 +121,7 @@ func postFromRow(row database.GetPostsInPlaceRow) models.Post {
 		FeedID:      uuid.MustParse(row.FeedID),
 		FeedName:    row.FeedName,
 		IsRead:      row.ReadAt.Valid,
+		Restorable:  Restorable(Place(row.TrashedFrom.String), row.FeedRemovedAt.Valid),
 	}
 }
 
@@ -176,6 +177,7 @@ func searchResultFromRow(row database.SearchPostsByUserRow) SearchResult {
 			FeedID:      uuid.MustParse(row.FeedID),
 			FeedName:    row.FeedName,
 			IsRead:      row.ReadAt.Valid,
+			Restorable:  Restorable(Place(row.TrashedFrom.String), row.FeedRemovedAt.Valid),
 		},
 		Place: placeOf(row.Place),
 	}

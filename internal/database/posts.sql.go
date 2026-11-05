@@ -92,7 +92,7 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 
 const getSearchResult = `-- name: GetSearchResult :one
 SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id,
-       post_states.place, post_states.read_at
+       post_states.place, post_states.read_at, post_states.trashed_from, feeds.removed_at AS feed_removed_at
 FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
 LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id = ?1
@@ -106,20 +106,22 @@ type GetSearchResultParams struct {
 }
 
 type GetSearchResultRow struct {
-	ID          string
-	Title       string
-	Url         string
-	Description sql.NullString
-	PublishedAt time.Time
-	FeedName    string
-	FeedID      string
-	Place       sql.NullString
-	ReadAt      sql.NullTime
+	ID            string
+	Title         string
+	Url           string
+	Description   sql.NullString
+	PublishedAt   time.Time
+	FeedName      string
+	FeedID        string
+	Place         sql.NullString
+	ReadAt        sql.NullTime
+	TrashedFrom   sql.NullString
+	FeedRemovedAt sql.NullTime
 }
 
 // One Post as SearchPostsByUser returns it, to re-render a result after an action.
-// Unlike search, it doesn't hide a removed Feed's Queue Posts: restoring one
-// from a result still re-renders it rather than failing after the move.
+// Unlike search, it doesn't hide a removed Feed's Queue Posts, so re-rendering
+// never fails after a move.
 func (q *Queries) GetSearchResult(ctx context.Context, arg GetSearchResultParams) (GetSearchResultRow, error) {
 	row := q.db.QueryRowContext(ctx, getSearchResult, arg.UserID, arg.PostID)
 	var i GetSearchResultRow
@@ -133,13 +135,15 @@ func (q *Queries) GetSearchResult(ctx context.Context, arg GetSearchResultParams
 		&i.FeedID,
 		&i.Place,
 		&i.ReadAt,
+		&i.TrashedFrom,
+		&i.FeedRemovedAt,
 	)
 	return i, err
 }
 
 const searchPostsByUser = `-- name: SearchPostsByUser :many
 SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id,
-       post_states.place, post_states.read_at
+       post_states.place, post_states.read_at, post_states.trashed_from, feeds.removed_at AS feed_removed_at
 FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
 LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id = ?1
@@ -158,15 +162,17 @@ type SearchPostsByUserParams struct {
 }
 
 type SearchPostsByUserRow struct {
-	ID          string
-	Title       string
-	Url         string
-	Description sql.NullString
-	PublishedAt time.Time
-	FeedName    string
-	FeedID      string
-	Place       sql.NullString
-	ReadAt      sql.NullTime
+	ID            string
+	Title         string
+	Url           string
+	Description   sql.NullString
+	PublishedAt   time.Time
+	FeedName      string
+	FeedID        string
+	Place         sql.NullString
+	ReadAt        sql.NullTime
+	TrashedFrom   sql.NullString
+	FeedRemovedAt sql.NullTime
 }
 
 // Posts in every Place; a NULL place means the Post is in the Queue.
@@ -190,6 +196,8 @@ func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserPa
 			&i.FeedID,
 			&i.Place,
 			&i.ReadAt,
+			&i.TrashedFrom,
+			&i.FeedRemovedAt,
 		); err != nil {
 			return nil, err
 		}

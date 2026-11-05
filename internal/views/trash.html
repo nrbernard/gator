@@ -28,11 +28,16 @@
 </li>
 {{ end }}
 
-{{/* One button per move from the Trash. */}}
+{{/* One button per move from the Trash. A Post that can't go back, as it came
+     from the Queue and its Feed is removed, says so instead. */}}
 {{ block "trash-actions" . }}
 <div class="row-actions">
-  <button hx-post="/trash/{{ .ID }}/restore" hx-target="#trash" hx-swap="outerHTML" class="row-action">
-    {{ template "icon-undo-2" "size-3.5" }}<span>Restore</span>
-  </button>
+  {{ if .Restorable }}
+    <button hx-post="/trash/{{ .ID }}/restore" hx-target="#trash" hx-swap="outerHTML" class="row-action">
+      {{ template "icon-undo-2" "size-3.5" }}<span>Restore</span>
+    </button>
+  {{ else }}
+    <span class="row-note">Feed removed</span>
+  {{ end }}
 </div>
 {{ end }}

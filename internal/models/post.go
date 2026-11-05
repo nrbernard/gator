@@ -15,6 +15,9 @@ type Post struct {
 	FeedID      uuid.UUID
 	FeedName    string
 	IsRead      bool
+	// Restorable is whether Restore can take the Post out of the Trash: not
+	// when it came from the Queue and its Feed has since been removed.
+	Restorable bool
 }
 
 // Queue is the top of the user's Queue: the Post to triage next, if any, and

@@ -133,12 +133,24 @@ func (s *PostStateService) Unarchive(ctx context.Context, userID, postID uuid.UU
 	})
 }
 
+// Restorable reports whether Restore can return a Post trashed from
+// trashedFrom: not to the Queue once its Feed is removed, as the Queue hides
+// a removed Feed's Posts and it would be lost there.
+func Restorable(trashedFrom Place, feedRemoved bool) bool {
+	return trashedFrom != PlaceQueue || !feedRemoved
+}
+
 // Restore returns a trashed Post to the Place it was trashed from, with its
-// Read mark. It is rejected for a Post that isn't in the Trash.
+// Read mark. It is rejected for a Post that isn't in the Trash, or that isn't
+// Restorable.
 func (s *PostStateService) Restore(ctx context.Context, userID, postID uuid.UUID) error {
-	current, err := s.State(ctx, userID, postID)
+	row, err := s.load(ctx, userID, postID)
 	if err != nil {
 		return err
+	}
+	current := stateFromRow(row)
+	if !Restorable(current.TrashedFrom, row.FeedRemovedAt.Valid) {
+		return fmt.Errorf("%w: restore a post to the queue of a removed feed", ErrInvalidMove)
 	}
 	// Only a trashed Post has TrashedFrom, so move rejects every other Post.
 	if current.TrashedFrom != PlaceQueue {

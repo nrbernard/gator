@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -112,6 +113,45 @@ func TestFeeds_RemovingAFeedKeepsItsReadingListArchiveAndTrashPostsWithItsName(t
 		body := app.request(t, http.MethodGet, target, nil).Body.String()
 		assertContains(t, body, title, "Example Feed")
 	}
+}
+
+func TestFeeds_ARemovedFeedsPostTrashedFromTheQueueCannotBeRestored(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	fromQueue := app.post(t, "Needle from the Queue", "", time.Now())
+	fromReadingList := app.post(t, "Needle from the Reading list", "", time.Now())
+	if err := app.states.Trash(ctx, app.userID, fromQueue, service.PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	app.putIn(t, fromReadingList, service.PlaceReadingList)
+	if err := app.states.Trash(ctx, app.userID, fromReadingList, service.PlaceReadingList); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	app.removeFeed(t)
+
+	trash := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+	search := app.request(t, http.MethodPost, "/search", strings.NewReader("search=needle")).Body.String()
+	for _, list := range []struct{ body, item, restore string }{
+		{trash, `id="post-%s"`, `/trash/%s/restore`},
+		{search, `id="search-result-%s"`, `/search/%s/restore`},
+	} {
+		unrestorable := listItem(t, list.body, fmt.Sprintf(list.item, fromQueue))
+		assertContains(t, unrestorable, "Feed removed")
+		assertNotContains(t, unrestorable, fmt.Sprintf(list.restore, fromQueue))
+		restorable := listItem(t, list.body, fmt.Sprintf(list.item, fromReadingList))
+		assertContains(t, restorable, fmt.Sprintf(list.restore, fromReadingList))
+		assertNotContains(t, restorable, "Feed removed")
+	}
+
+	for _, target := range []string{"/trash/" + fromQueue.String() + "/restore", "/search/" + fromQueue.String() + "/restore"} {
+		rec := httptest.NewRecorder()
+		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, target, nil))
+		if rec.Code != http.StatusConflict {
+			t.Errorf("POST %s: status = %d, want %d", target, rec.Code, http.StatusConflict)
+		}
+	}
+	app.assertPlace(t, fromQueue, service.PlaceTrash)
 }
 
 func TestFeeds_TheEmptyQueuesLastFetchIgnoresRemovedFeeds(t *testing.T) {

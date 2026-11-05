@@ -132,8 +132,10 @@ func (q *Queries) GetNextQueuePost(ctx context.Context, arg GetNextQueuePostPara
 }
 
 const getPostState = `-- name: GetPostState :one
-SELECT posts.id AS post_id, post_states.place, post_states.trashed_from, post_states.read_at
+SELECT posts.id AS post_id, post_states.place, post_states.trashed_from, post_states.read_at,
+       feeds.removed_at AS feed_removed_at
 FROM posts
+JOIN feeds ON feeds.id = posts.feed_id
 LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id = ?1
 WHERE posts.id = ?2
 `
@@ -144,10 +146,11 @@ type GetPostStateParams struct {
 }
 
 type GetPostStateRow struct {
-	PostID      string
-	Place       sql.NullString
-	TrashedFrom sql.NullString
-	ReadAt      sql.NullTime
+	PostID        string
+	Place         sql.NullString
+	TrashedFrom   sql.NullString
+	ReadAt        sql.NullTime
+	FeedRemovedAt sql.NullTime
 }
 
 // One row per existing Post; NULL place means the Post is in the user's Queue.
@@ -159,12 +162,14 @@ func (q *Queries) GetPostState(ctx context.Context, arg GetPostStateParams) (Get
 		&i.Place,
 		&i.TrashedFrom,
 		&i.ReadAt,
+		&i.FeedRemovedAt,
 	)
 	return i, err
 }
 
 const getPostsInPlace = `-- name: GetPostsInPlace :many
-SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
+SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at,
+       post_states.trashed_from, feeds.removed_at AS feed_removed_at
 FROM post_states
 JOIN posts ON posts.id = post_states.post_id
 JOIN feeds ON feeds.id = posts.feed_id
@@ -178,14 +183,16 @@ type GetPostsInPlaceParams struct {
 }
 
 type GetPostsInPlaceRow struct {
-	ID          string
-	Title       string
-	Url         string
-	Description sql.NullString
-	PublishedAt time.Time
-	FeedID      string
-	FeedName    string
-	ReadAt      sql.NullTime
+	ID            string
+	Title         string
+	Url           string
+	Description   sql.NullString
+	PublishedAt   time.Time
+	FeedID        string
+	FeedName      string
+	ReadAt        sql.NullTime
+	TrashedFrom   sql.NullString
+	FeedRemovedAt sql.NullTime
 }
 
 // The Posts in the Reading list, the Archive, or the Trash, most recently
@@ -209,6 +216,8 @@ func (q *Queries) GetPostsInPlace(ctx context.Context, arg GetPostsInPlaceParams
 			&i.FeedID,
 			&i.FeedName,
 			&i.ReadAt,
+			&i.TrashedFrom,
+			&i.FeedRemovedAt,
 		); err != nil {
 			return nil, err
 		}

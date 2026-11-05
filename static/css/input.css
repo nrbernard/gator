@@ -235,6 +235,10 @@
   .row-action-danger {
     @apply hover:bg-red-500/15 hover:text-red-300;
   }
+  /* Says why a row has no action, in the action's place. */
+  .row-note {
+    @apply inline-flex h-8 items-center px-2 text-[13px] text-white/45;
+  }
   /* A dark panel for a question in place of the card (trash all's confirmation). */
   .sheet {
     @apply rounded-2xl border border-white/10 bg-neutral-900 p-6;
