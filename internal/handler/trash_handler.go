@@ -29,19 +29,12 @@ func (h *TrashHandler) Index(c echo.Context) error {
 
 // Restore returns the Post to where it was trashed from.
 func (h *TrashHandler) Restore(c echo.Context) error {
-	userID, err := currentUserID(c)
-	if err != nil {
-		return err
-	}
-	postID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid post ID")
-	}
-	ctx := c.Request().Context()
-	if err := h.StateService.Restore(ctx, userID, postID); err != nil {
-		return moveError(err)
-	}
-	posts, err := h.PostService.Trash(ctx, userID)
+	return applyMove(c, h.StateService.Restore, h.list)
+}
+
+// list responds with the updated Trash.
+func (h *TrashHandler) list(c echo.Context, userID, _ uuid.UUID) error {
+	posts, err := h.PostService.Trash(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}

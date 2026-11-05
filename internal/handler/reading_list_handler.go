@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -30,40 +29,27 @@ func (h *ReadingListHandler) Index(c echo.Context) error {
 
 // Open marks the Post Read; the browser opens its link alongside.
 func (h *ReadingListHandler) Open(c echo.Context) error {
-	return h.act(c, h.StateService.Open)
+	return applyMove(c, h.StateService.Open, h.list)
 }
 
 // ToggleRead marks the Post Read, or clears its Read mark.
 func (h *ReadingListHandler) ToggleRead(c echo.Context) error {
-	return h.act(c, h.StateService.ToggleRead)
+	return applyMove(c, h.StateService.ToggleRead, h.list)
 }
 
 // Archive moves the Post to the Archive.
 func (h *ReadingListHandler) Archive(c echo.Context) error {
-	return h.act(c, h.StateService.Archive)
+	return applyMove(c, h.StateService.Archive, h.list)
 }
 
 // Trash moves the Post to the Trash, from the Reading list.
 func (h *ReadingListHandler) Trash(c echo.Context) error {
-	return h.act(c, func(ctx context.Context, userID, postID uuid.UUID) error {
-		return h.StateService.Trash(ctx, userID, postID, service.PlaceReadingList)
-	})
+	return applyMove(c, trashFrom(h.StateService, service.PlaceReadingList), h.list)
 }
 
-func (h *ReadingListHandler) act(c echo.Context, move func(context.Context, uuid.UUID, uuid.UUID) error) error {
-	userID, err := currentUserID(c)
-	if err != nil {
-		return err
-	}
-	postID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid post ID")
-	}
-	ctx := c.Request().Context()
-	if err := move(ctx, userID, postID); err != nil {
-		return moveError(err)
-	}
-	posts, err := h.PostService.ReadingList(ctx, userID)
+// list responds with the updated Reading list.
+func (h *ReadingListHandler) list(c echo.Context, userID, _ uuid.UUID) error {
+	posts, err := h.PostService.ReadingList(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}

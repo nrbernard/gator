@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -46,33 +45,33 @@ func (h *PostHandler) Search(c echo.Context) error {
 
 // Keep moves a Queue Post to the Reading list.
 func (h *PostHandler) Keep(c echo.Context) error {
-	return h.act(c, h.StateService.Keep)
+	return applyMove(c, h.StateService.Keep, h.result)
 }
 
 // Open Keeps a Queue Post, or marks a Reading list Post, Read; the browser
 // opens its link alongside.
 func (h *PostHandler) Open(c echo.Context) error {
-	return h.act(c, h.StateService.Open)
+	return applyMove(c, h.StateService.Open, h.result)
 }
 
 // ToggleRead marks a Reading list Post Read, or clears its Read mark.
 func (h *PostHandler) ToggleRead(c echo.Context) error {
-	return h.act(c, h.StateService.ToggleRead)
+	return applyMove(c, h.StateService.ToggleRead, h.result)
 }
 
 // Archive moves a Reading list Post to the Archive.
 func (h *PostHandler) Archive(c echo.Context) error {
-	return h.act(c, h.StateService.Archive)
+	return applyMove(c, h.StateService.Archive, h.result)
 }
 
 // Unarchive moves an archived Post back to the Reading list.
 func (h *PostHandler) Unarchive(c echo.Context) error {
-	return h.act(c, h.StateService.Unarchive)
+	return applyMove(c, h.StateService.Unarchive, h.result)
 }
 
 // Restore returns a trashed Post to where it was trashed from.
 func (h *PostHandler) Restore(c echo.Context) error {
-	return h.act(c, h.StateService.Restore)
+	return applyMove(c, h.StateService.Restore, h.result)
 }
 
 // Trash moves the Post to the Trash from the Place the result showed it in,
@@ -84,25 +83,12 @@ func (h *PostHandler) Trash(c echo.Context) error {
 	default:
 		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid from")
 	}
-	return h.act(c, func(ctx context.Context, userID, postID uuid.UUID) error {
-		return h.StateService.Trash(ctx, userID, postID, from)
-	})
+	return applyMove(c, trashFrom(h.StateService, from), h.result)
 }
 
-func (h *PostHandler) act(c echo.Context, move func(context.Context, uuid.UUID, uuid.UUID) error) error {
-	userID, err := currentUserID(c)
-	if err != nil {
-		return err
-	}
-	postID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid post ID")
-	}
-	ctx := c.Request().Context()
-	if err := move(ctx, userID, postID); err != nil {
-		return moveError(err)
-	}
-	result, err := h.PostService.SearchResult(ctx, userID, postID)
+// result responds with the moved Post's result, showing its new Place.
+func (h *PostHandler) result(c echo.Context, userID, postID uuid.UUID) error {
+	result, err := h.PostService.SearchResult(c.Request().Context(), userID, postID)
 	if err != nil {
 		return moveError(err)
 	}

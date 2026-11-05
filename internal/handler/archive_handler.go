@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -30,30 +29,17 @@ func (h *ArchiveHandler) Index(c echo.Context) error {
 
 // Unarchive moves the Post back to the Reading list, to reread it.
 func (h *ArchiveHandler) Unarchive(c echo.Context) error {
-	return h.act(c, h.StateService.Unarchive)
+	return applyMove(c, h.StateService.Unarchive, h.list)
 }
 
 // Trash moves the Post to the Trash, from the Archive.
 func (h *ArchiveHandler) Trash(c echo.Context) error {
-	return h.act(c, func(ctx context.Context, userID, postID uuid.UUID) error {
-		return h.StateService.Trash(ctx, userID, postID, service.PlaceArchive)
-	})
+	return applyMove(c, trashFrom(h.StateService, service.PlaceArchive), h.list)
 }
 
-func (h *ArchiveHandler) act(c echo.Context, move func(context.Context, uuid.UUID, uuid.UUID) error) error {
-	userID, err := currentUserID(c)
-	if err != nil {
-		return err
-	}
-	postID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid post ID")
-	}
-	ctx := c.Request().Context()
-	if err := move(ctx, userID, postID); err != nil {
-		return moveError(err)
-	}
-	posts, err := h.PostService.Archive(ctx, userID)
+// list responds with the updated Archive.
+func (h *ArchiveHandler) list(c echo.Context, userID, _ uuid.UUID) error {
+	posts, err := h.PostService.Archive(c.Request().Context(), userID)
 	if err != nil {
 		return err
 	}
