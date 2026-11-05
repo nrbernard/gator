@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** done
+Status: done
 
 - [x] The module, the Fly build argument, the Docker Compose build argument, the Dockerfile default, and the README prerequisite all name Go 1.27.3 (`make check` fails until they agree); no 1.24 references remain outside vendored skills
 - [x] The goose library and the goose CLI pinned in the image are both v3.29.0, with the pin's comment intact

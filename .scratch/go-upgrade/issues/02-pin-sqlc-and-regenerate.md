@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (sqlc v1.31.1 requires Go 1.26)
 
-**Status:** done
+Status: done
 
 - [x] sqlc is declared as a tool dependency in the module at an exact version
 - [x] `make generate` uses the pinned tool and works on a machine with no sqlc installed

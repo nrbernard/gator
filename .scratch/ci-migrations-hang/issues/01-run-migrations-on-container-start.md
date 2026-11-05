@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** done
+Status: done
 
 Shipped in `13f9ea6` (deploy run 41900650594). The `/posts` health check doesn't block auto-stop: the machine still stopped ~6.5 minutes after the deploy.
 

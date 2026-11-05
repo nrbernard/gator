@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** done
+Status: done
 
 - [x] The hook runs the generated-code check only when the commit touches SQL queries or schema, so other commits are no slower
 - [x] Changing a query without regenerating makes the hook fail with a message naming `make generate`

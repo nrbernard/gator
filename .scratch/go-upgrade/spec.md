@@ -1,6 +1,6 @@
 # Upgrade Go to 1.27
 
-Status: ready-for-agent
+Status: done
 
 ## Problem Statement
 
