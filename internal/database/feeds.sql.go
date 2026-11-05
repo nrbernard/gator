@@ -20,7 +20,7 @@ VALUES (
     ?,
     ? 
 )
-RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified
+RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at
 `
 
 type CreateFeedParams struct {
@@ -51,6 +51,8 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.Description,
 		&i.Etag,
 		&i.LastModified,
+		&i.LastFetchError,
+		&i.LastFetchErrorAt,
 	)
 	return i, err
 }
@@ -112,7 +114,7 @@ func (q *Queries) DeleteFeedFollow(ctx context.Context, arg DeleteFeedFollowPara
 }
 
 const getFeedByUrl = `-- name: GetFeedByUrl :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified FROM feeds WHERE url = ?
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at FROM feeds WHERE url = ?
 `
 
 func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
@@ -129,6 +131,8 @@ func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
 		&i.Description,
 		&i.Etag,
 		&i.LastModified,
+		&i.LastFetchError,
+		&i.LastFetchErrorAt,
 	)
 	return i, err
 }
@@ -227,7 +231,7 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 }
 
 const getFeedsToFetch = `-- name: GetFeedsToFetch :many
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified FROM feeds
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at FROM feeds
 WHERE last_fetched_at IS NULL
    OR last_fetched_at < ?
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
@@ -253,6 +257,8 @@ func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTim
 			&i.Description,
 			&i.Etag,
 			&i.LastModified,
+			&i.LastFetchError,
+			&i.LastFetchErrorAt,
 		); err != nil {
 			return nil, err
 		}
@@ -268,7 +274,7 @@ func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTim
 }
 
 const getNextFeedToFetch = `-- name: GetNextFeedToFetch :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified FROM feeds
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at FROM feeds
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
 LIMIT 1
 `
@@ -287,6 +293,8 @@ func (q *Queries) GetNextFeedToFetch(ctx context.Context) (Feed, error) {
 		&i.Description,
 		&i.Etag,
 		&i.LastModified,
+		&i.LastFetchError,
+		&i.LastFetchErrorAt,
 	)
 	return i, err
 }
@@ -297,6 +305,22 @@ UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMES
 
 func (q *Queries) MarkFeedAsFetched(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, markFeedAsFetched, id)
+	return err
+}
+
+const recordFeedFetchError = `-- name: RecordFeedFetchError :exec
+UPDATE feeds
+SET last_fetch_error = ?, last_fetch_error_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`
+
+type RecordFeedFetchErrorParams struct {
+	LastFetchError sql.NullString
+	ID             string
+}
+
+func (q *Queries) RecordFeedFetchError(ctx context.Context, arg RecordFeedFetchErrorParams) error {
+	_, err := q.db.ExecContext(ctx, recordFeedFetchError, arg.LastFetchError, arg.ID)
 	return err
 }
 

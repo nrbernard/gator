@@ -122,7 +122,15 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 				fmt.Printf("Rate limited for feed %s, skipping for now\n", feed.Name)
 				continue
 			}
-			return fmt.Errorf("failed to fetch feed: %s", err)
+			// Record the failure on this Feed and carry on with the rest.
+			fmt.Printf("failed to fetch feed %s: %s\n", feed.Name, err)
+			if err := s.Repo.RecordFeedFetchError(ctx, database.RecordFeedFetchErrorParams{
+				LastFetchError: sql.NullString{String: err.Error(), Valid: true},
+				ID:             feed.ID,
+			}); err != nil {
+				return fmt.Errorf("failed to record fetch error for feed %s: %s", feed.Name, err)
+			}
+			continue
 		}
 
 		// Handle 304 Not Modified response
