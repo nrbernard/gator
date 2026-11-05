@@ -81,8 +81,8 @@
      surrounding #queue's hx-vals send the page's cutoff. Takes the Queue. */}}
 {{ block "queue-new" . }}
 <span id="queue-new" class="contents">
-  {{ if .New }}
-    <button type="button" class="chip" hx-get="/queue/card" hx-vals='{"cutoff": "{{ .NewCutoffParam }}"}' hx-target="#queue" hx-swap="outerHTML">{{ template "icon-arrow-up" "size-3.5" }}{{ .New }} new</button>
+  {{ if .NewCount }}
+    <button type="button" class="chip" hx-get="/queue/card" hx-vals='{"cutoff": "{{ .NewCutoffParam }}"}' hx-target="#queue" hx-swap="outerHTML">{{ template "icon-arrow-up" "size-3.5" }}{{ .NewCount }} new</button>
   {{ end }}
 </span>
 {{ end }}

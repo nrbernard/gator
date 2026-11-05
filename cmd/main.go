@@ -69,7 +69,7 @@ func main() {
 		ReadingList: &handler.ReadingListHandler{PostService: postService, StateService: stateService},
 		Archive:     &handler.ArchiveHandler{PostService: postService, StateService: stateService},
 		Trash:       &handler.TrashHandler{PostService: postService, StateService: stateService},
-		Post:        &handler.PostHandler{PostService: postService, StateService: stateService},
+		Search:      &handler.SearchHandler{PostService: postService, StateService: stateService},
 		Feed:        feedHandler,
 		StaticDir:   "static",
 	})

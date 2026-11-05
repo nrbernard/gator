@@ -36,7 +36,7 @@ func (s *PostService) AwaitSecond(ctx context.Context) error {
 // Posts are new since. If no Post is shown, it also returns when gator last
 // fetched the user's Feeds.
 func (s *PostService) Queue(ctx context.Context, userID uuid.UUID, cutoff time.Time) (models.Queue, error) {
-	count, err := s.CountQueueCreatedBy(ctx, userID, cutoff)
+	count, err := s.CountQueueAtOrBefore(ctx, userID, cutoff)
 	if err != nil {
 		return models.Queue{}, err
 	}
@@ -51,7 +51,7 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID, cutoff time.T
 	if err != nil {
 		return models.Queue{}, fmt.Errorf("count new posts: %w", err)
 	}
-	queue := models.Queue{Count: count, Cutoff: cutoff, New: int(newCount), NewCutoff: newCutoff}
+	queue := models.Queue{Count: count, Cutoff: cutoff, NewCount: int(newCount), NewCutoff: newCutoff}
 
 	row, err := s.Repo.GetNextQueuePost(ctx, database.GetNextQueuePostParams{
 		UserID: userID.String(),
@@ -83,10 +83,10 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID, cutoff time.T
 	return queue, nil
 }
 
-// CountQueueCreatedBy returns how many Queue Posts gator fetched at or before
+// CountQueueAtOrBefore returns how many Queue Posts gator fetched at or before
 // cutoff: the Posts PostStateService.TrashAll would trash.
-func (s *PostService) CountQueueCreatedBy(ctx context.Context, userID uuid.UUID, cutoff time.Time) (int, error) {
-	n, err := s.Repo.CountQueuePostsCreatedBy(ctx, database.CountQueuePostsCreatedByParams{
+func (s *PostService) CountQueueAtOrBefore(ctx context.Context, userID uuid.UUID, cutoff time.Time) (int, error) {
+	n, err := s.Repo.CountQueuePostsCreatedAtOrBefore(ctx, database.CountQueuePostsCreatedAtOrBeforeParams{
 		UserID: userID.String(),
 		Cutoff: cutoff.UTC(),
 	})

@@ -30,10 +30,10 @@ type Queue struct {
 	// loaded, or when the chip last moved it. The page sends it with each
 	// Queue request, and trash all spares Posts fetched after it.
 	Cutoff time.Time
-	// New is how many Queue Posts gator fetched after the cutoff and by
+	// NewCount is how many Queue Posts gator fetched after the cutoff and by
 	// NewCutoff, the cutoff a page loading now would have. Tapping the chip
 	// moves the cutoff to NewCutoff, revealing exactly those.
-	New       int
+	NewCount  int
 	NewCutoff time.Time
 	// LastFetchedAt is when gator last fetched any of the user's Feeds, set
 	// for an empty Queue; nil if it never has.

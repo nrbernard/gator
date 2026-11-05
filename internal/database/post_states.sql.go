@@ -11,6 +11,32 @@ import (
 	"time"
 )
 
+const countQueuePostsCreatedAtOrBefore = `-- name: CountQueuePostsCreatedAtOrBefore :one
+SELECT COUNT(*)
+FROM posts
+WHERE posts.feed_id IN (
+    SELECT feed_follows.feed_id FROM feed_follows
+    JOIN feeds AS followed ON followed.id = feed_follows.feed_id
+    WHERE feed_follows.user_id = ?1 AND followed.removed_at IS NULL
+)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) <= datetime(?2)
+`
+
+type CountQueuePostsCreatedAtOrBeforeParams struct {
+	UserID string
+	Cutoff interface{}
+}
+
+// The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
+// datetime() compares at whole seconds, the resolution of a Post's fetch time.
+func (q *Queries) CountQueuePostsCreatedAtOrBefore(ctx context.Context, arg CountQueuePostsCreatedAtOrBeforeParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedAtOrBefore, arg.UserID, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countQueuePostsCreatedBetween = `-- name: CountQueuePostsCreatedBetween :one
 SELECT COUNT(*)
 FROM posts
@@ -34,32 +60,6 @@ type CountQueuePostsCreatedBetweenParams struct {
 // cutoff: the new Posts the chip counts, and reveals when tapped.
 func (q *Queries) CountQueuePostsCreatedBetween(ctx context.Context, arg CountQueuePostsCreatedBetweenParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedBetween, arg.UserID, arg.Cutoff, arg.NewCutoff)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countQueuePostsCreatedBy = `-- name: CountQueuePostsCreatedBy :one
-SELECT COUNT(*)
-FROM posts
-WHERE posts.feed_id IN (
-    SELECT feed_follows.feed_id FROM feed_follows
-    JOIN feeds AS followed ON followed.id = feed_follows.feed_id
-    WHERE feed_follows.user_id = ?1 AND followed.removed_at IS NULL
-)
-AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
-AND datetime(posts.created_at) <= datetime(?2)
-`
-
-type CountQueuePostsCreatedByParams struct {
-	UserID string
-	Cutoff interface{}
-}
-
-// The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
-// datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
-func (q *Queries) CountQueuePostsCreatedBy(ctx context.Context, arg CountQueuePostsCreatedByParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedBy, arg.UserID, arg.Cutoff)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -288,7 +288,7 @@ func (q *Queries) SetPostState(ctx context.Context, arg SetPostStateParams) erro
 	return err
 }
 
-const trashQueuePostsCreatedBy = `-- name: TrashQueuePostsCreatedBy :execrows
+const trashQueuePostsCreatedAtOrBefore = `-- name: TrashQueuePostsCreatedAtOrBefore :exec
 INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
 SELECT ?1, posts.id, 'trash', 'queue', ?2
 FROM posts
@@ -301,17 +301,14 @@ AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id A
 AND datetime(posts.created_at) <= datetime(?3)
 `
 
-type TrashQueuePostsCreatedByParams struct {
+type TrashQueuePostsCreatedAtOrBeforeParams struct {
 	UserID    string
 	ChangedAt time.Time
 	Cutoff    interface{}
 }
 
-// Trashes, from the Queue, the Posts CountQueuePostsCreatedBy counts.
-func (q *Queries) TrashQueuePostsCreatedBy(ctx context.Context, arg TrashQueuePostsCreatedByParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, trashQueuePostsCreatedBy, arg.UserID, arg.ChangedAt, arg.Cutoff)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+// Trashes, from the Queue, the Posts CountQueuePostsCreatedAtOrBefore counts.
+func (q *Queries) TrashQueuePostsCreatedAtOrBefore(ctx context.Context, arg TrashQueuePostsCreatedAtOrBeforeParams) error {
+	_, err := q.db.ExecContext(ctx, trashQueuePostsCreatedAtOrBefore, arg.UserID, arg.ChangedAt, arg.Cutoff)
+	return err
 }

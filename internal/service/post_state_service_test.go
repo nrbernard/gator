@@ -422,14 +422,10 @@ func TestPostStateService_TrashAllTrashesQueuePostsCreatedByTheCutoff(t *testing
 		t.Fatalf("Keep: %v", err)
 	}
 
-	trashed, err := s.TrashAll(ctx, f.userID, cutoff)
-	if err != nil {
+	if err := s.TrashAll(ctx, f.userID, cutoff); err != nil {
 		t.Fatalf("TrashAll: %v", err)
 	}
 
-	if trashed != 2 {
-		t.Errorf("trashed %d posts, want 2", trashed)
-	}
 	assertState(t, s, f.userID, seen, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
 	assertState(t, s, f.userID, atCutoff, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
 	assertState(t, s, f.userID, unseen, PostState{Place: PlaceQueue})

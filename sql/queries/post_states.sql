@@ -51,9 +51,9 @@ AND feeds.last_fetched_at IS NOT NULL
 ORDER BY feeds.last_fetched_at DESC
 LIMIT 1;
 
--- name: CountQueuePostsCreatedBy :one
+-- name: CountQueuePostsCreatedAtOrBefore :one
 -- The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
--- datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
+-- datetime() compares at whole seconds, the resolution of a Post's fetch time.
 SELECT COUNT(*)
 FROM posts
 WHERE posts.feed_id IN (
@@ -64,8 +64,8 @@ WHERE posts.feed_id IN (
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
 AND datetime(posts.created_at) <= datetime(@cutoff);
 
--- name: TrashQueuePostsCreatedBy :execrows
--- Trashes, from the Queue, the Posts CountQueuePostsCreatedBy counts.
+-- name: TrashQueuePostsCreatedAtOrBefore :exec
+-- Trashes, from the Queue, the Posts CountQueuePostsCreatedAtOrBefore counts.
 INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
 SELECT @user_id, posts.id, 'trash', 'queue', @changed_at
 FROM posts

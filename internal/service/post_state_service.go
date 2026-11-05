@@ -91,18 +91,17 @@ func (s *PostStateService) Trash(ctx context.Context, userID, postID uuid.UUID, 
 }
 
 // TrashAll trashes, from the Queue, every Queue Post gator fetched at or before
-// cutoff, the moment the user's Queue page loaded, so Posts the user hasn't
-// been shown are spared. It returns how many Posts it trashed.
-func (s *PostStateService) TrashAll(ctx context.Context, userID uuid.UUID, cutoff time.Time) (int, error) {
-	n, err := s.Repo.TrashQueuePostsCreatedBy(ctx, database.TrashQueuePostsCreatedByParams{
+// cutoff, the user's Queue page's, so Posts the user hasn't been shown are
+// spared.
+func (s *PostStateService) TrashAll(ctx context.Context, userID uuid.UUID, cutoff time.Time) error {
+	if err := s.Repo.TrashQueuePostsCreatedAtOrBefore(ctx, database.TrashQueuePostsCreatedAtOrBeforeParams{
 		UserID:    userID.String(),
 		Cutoff:    cutoff.UTC(),
 		ChangedAt: s.Clock.Now().UTC(),
-	})
-	if err != nil {
-		return 0, fmt.Errorf("trash all: %w", err)
+	}); err != nil {
+		return fmt.Errorf("trash all: %w", err)
 	}
-	return int(n), nil
+	return nil
 }
 
 // Open records that the user opened the Post: it Keeps a Queue Post and marks

@@ -66,7 +66,7 @@ func (h *QueueHandler) ConfirmTrashAll(c echo.Context) error {
 	if !ok {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
 	}
-	count, err := h.PostService.CountQueueCreatedBy(c.Request().Context(), userID, cutoff)
+	count, err := h.PostService.CountQueueAtOrBefore(c.Request().Context(), userID, cutoff)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (h *QueueHandler) TrashAll(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
 	}
 	ctx := c.Request().Context()
-	if _, err := h.StateService.TrashAll(ctx, userID, cutoff); err != nil {
+	if err := h.StateService.TrashAll(ctx, userID, cutoff); err != nil {
 		return err
 	}
 	queue, err := h.PostService.Queue(ctx, userID, cutoff)

@@ -109,7 +109,7 @@ func newTestAppOn(t *testing.T, c *clock.Clock) *testApp {
 		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
 		Archive:     &ArchiveHandler{PostService: posts, StateService: app.states},
 		Trash:       &TrashHandler{PostService: posts, StateService: app.states},
-		Post:        &PostHandler{PostService: posts, StateService: app.states},
+		Search:      &SearchHandler{PostService: posts, StateService: app.states},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
 		StaticDir:   "../../static",
 	})
