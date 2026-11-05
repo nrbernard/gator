@@ -1,6 +1,6 @@
 # Redesign gator around the Queue
 
-Status: needs-triage
+Status: ready-for-agent
 
 Vocabulary is defined in `GLOSSARY.md`; the core model decision is `docs/adr/0001-exclusive-post-states.md`.
 
