@@ -23,6 +23,7 @@ func Register(e *echo.Echo, h Handlers) {
 	e.POST("/queue/refresh", h.Queue.Refresh)
 	e.POST("/queue/:id/keep", h.Queue.Keep)
 	e.POST("/queue/:id/trash", h.Queue.Trash)
+	e.POST("/queue/:id/open", h.Queue.Open)
 
 	e.GET("/reading-list", h.ReadingList.Index)
 

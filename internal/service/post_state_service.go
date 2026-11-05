@@ -60,6 +60,14 @@ func (s *PostStateService) Keep(ctx context.Context, userID, postID uuid.UUID) e
 	})
 }
 
+// Open is the move for clicking through to a Post's site. Opening a Queue Post
+// Keeps it and marks it Read, because clicking through counts as wanting it.
+func (s *PostStateService) Open(ctx context.Context, userID, postID uuid.UUID) error {
+	return s.move(ctx, userID, postID, "open", []Place{PlaceQueue}, func(PostState) PostState {
+		return PostState{Place: PlaceReadingList, Read: true}
+	})
+}
+
 // Trash moves a Post from the Place the user saw it in to the Trash,
 // remembering that Place. It is rejected if the Post is no longer there, so a
 // stale screen can't trash a Post that has since moved.
@@ -70,6 +78,20 @@ func (s *PostStateService) Trash(ctx context.Context, userID, postID uuid.UUID, 
 	return s.move(ctx, userID, postID, "trash", []Place{from}, func(current PostState) PostState {
 		return PostState{Place: PlaceTrash, TrashedFrom: current.Place, Read: current.Read}
 	})
+}
+
+// TrashAll trashes, from the Queue, every Queue Post gator fetched at or before
+// cutoff, the moment the user's Queue page loaded, so Posts the user hasn't
+// been shown are spared. It returns how many Posts it trashed.
+func (s *PostStateService) TrashAll(ctx context.Context, userID uuid.UUID, cutoff time.Time) (int, error) {
+	n, err := s.Repo.TrashQueuePostsCreatedBy(ctx, database.TrashQueuePostsCreatedByParams{
+		UserID: userID.String(),
+		Cutoff: cutoff.UTC(),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("trash all: %w", err)
+	}
+	return int(n), nil
 }
 
 // move applies to to the Post's current state, provided the Post is in one of

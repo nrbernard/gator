@@ -60,6 +60,12 @@ func (h *QueueHandler) Keep(c echo.Context) error {
 	return h.triage(c, h.StateService.Keep)
 }
 
+// Open Keeps the Post marked Read, as the user clicks through to its site, and
+// responds with the next card.
+func (h *QueueHandler) Open(c echo.Context) error {
+	return h.triage(c, h.StateService.Open)
+}
+
 // Trash moves the Post to the Trash and responds with the next card.
 func (h *QueueHandler) Trash(c echo.Context) error {
 	return h.triage(c, func(ctx context.Context, userID, postID uuid.UUID) error {

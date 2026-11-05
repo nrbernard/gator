@@ -25,6 +25,28 @@ func (q *Queries) CountQueuePosts(ctx context.Context, userID string) (int64, er
 	return count, err
 }
 
+const countQueuePostsCreatedBy = `-- name: CountQueuePostsCreatedBy :one
+SELECT COUNT(*)
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) <= datetime(?2)
+`
+
+type CountQueuePostsCreatedByParams struct {
+	UserID string
+	Cutoff interface{}
+}
+
+// The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
+// datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
+func (q *Queries) CountQueuePostsCreatedBy(ctx context.Context, arg CountQueuePostsCreatedByParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedBy, arg.UserID, arg.Cutoff)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getNextQueuePost = `-- name: GetNextQueuePost :one
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name
 FROM posts
@@ -172,4 +194,27 @@ func (q *Queries) SetPostState(ctx context.Context, arg SetPostStateParams) erro
 		arg.ReadAt,
 	)
 	return err
+}
+
+const trashQueuePostsCreatedBy = `-- name: TrashQueuePostsCreatedBy :execrows
+INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
+SELECT ?1, posts.id, 'trash', 'queue', CURRENT_TIMESTAMP
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) <= datetime(?2)
+`
+
+type TrashQueuePostsCreatedByParams struct {
+	UserID string
+	Cutoff interface{}
+}
+
+// Trashes, from the Queue, the Posts CountQueuePostsCreatedBy counts.
+func (q *Queries) TrashQueuePostsCreatedBy(ctx context.Context, arg TrashQueuePostsCreatedByParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, trashQueuePostsCreatedBy, arg.UserID, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

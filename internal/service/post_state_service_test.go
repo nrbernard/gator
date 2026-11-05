@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -165,4 +166,74 @@ func TestPostStateService_RejectsMovesOfAMissingPost(t *testing.T) {
 	if !errors.Is(err, ErrPostNotFound) {
 		t.Errorf("err = %v, want ErrPostNotFound", err)
 	}
+}
+
+func TestPostStateService_OpenMovesAQueuePostToTheReadingListMarkedRead(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	postID := f.post(t, "Clicked through", time.Now())
+
+	if err := s.Open(context.Background(), f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList, Read: true})
+}
+
+// setCreatedAt backdates when gator fetched the Post, in the format SQLite's
+// CURRENT_TIMESTAMP writes.
+func setCreatedAt(t *testing.T, db *sql.DB, postID uuid.UUID, at time.Time) {
+	t.Helper()
+	if _, err := db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", at.UTC().Format(time.DateTime), postID.String()); err != nil {
+		t.Fatalf("set created_at: %v", err)
+	}
+}
+
+func TestPostStateService_TrashAllTrashesQueuePostsCreatedByTheCutoff(t *testing.T) {
+	db := setupTestSQLDB(t)
+	f := newFixture(t, database.New(db))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	cutoff := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
+	seen := f.post(t, "Seen", time.Now())
+	setCreatedAt(t, db, seen, cutoff.Add(-time.Hour))
+	atCutoff := f.post(t, "Fetched as the page loaded", time.Now())
+	setCreatedAt(t, db, atCutoff, cutoff)
+	unseen := f.post(t, "Fetched after the page loaded", time.Now())
+	setCreatedAt(t, db, unseen, cutoff.Add(time.Minute))
+	kept := f.post(t, "Kept", time.Now())
+	setCreatedAt(t, db, kept, cutoff.Add(-time.Hour))
+	if err := s.Keep(ctx, f.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	trashed, err := s.TrashAll(ctx, f.userID, cutoff)
+	if err != nil {
+		t.Fatalf("TrashAll: %v", err)
+	}
+
+	if trashed != 2 {
+		t.Errorf("trashed %d posts, want 2", trashed)
+	}
+	assertState(t, s, f.userID, seen, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
+	assertState(t, s, f.userID, atCutoff, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
+	assertState(t, s, f.userID, unseen, PostState{Place: PlaceQueue})
+	assertState(t, s, f.userID, kept, PostState{Place: PlaceReadingList})
+}
+
+func TestPostStateService_OpenRejectsATrashedPost(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Thrown away", time.Now())
+	if err := s.Trash(ctx, f.userID, postID, PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	err := s.Open(ctx, f.userID, postID)
+
+	if !errors.Is(err, ErrInvalidMove) {
+		t.Errorf("err = %v, want ErrInvalidMove", err)
+	}
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue})
 }

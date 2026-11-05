@@ -21,6 +21,24 @@ FROM posts
 WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id);
 
+-- name: CountQueuePostsCreatedBy :one
+-- The Queue Posts gator fetched at or before the cutoff: what trash all trashes.
+-- datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
+SELECT COUNT(*)
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
+AND datetime(posts.created_at) <= datetime(@cutoff);
+
+-- name: TrashQueuePostsCreatedBy :execrows
+-- Trashes, from the Queue, the Posts CountQueuePostsCreatedBy counts.
+INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
+SELECT @user_id, posts.id, 'trash', 'queue', CURRENT_TIMESTAMP
+FROM posts
+WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
+AND datetime(posts.created_at) <= datetime(@cutoff);
+
 -- name: GetReadingListPosts :many
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name, post_states.read_at
 FROM post_states

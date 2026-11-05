@@ -197,6 +197,31 @@ func TestQueue_TriageMovesThePostAndRespondsWithTheNextCard(t *testing.T) {
 	}
 }
 
+func TestQueue_OpeningTheCardGoesToTheSiteAndKeepsThePostMarkedRead(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	next := app.post(t, "Next post", "", now.Add(-1*time.Hour))
+	top := app.post(t, "Top post", "", now)
+
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	assertContains(t, page,
+		`href="http://example.com/posts/`+top.String()+`" target="_blank"`,
+		`hx-post="/queue/`+top.String()+`/open"`)
+
+	body := app.request(t, http.MethodPost, "/queue/"+top.String()+"/open", nil).Body.String()
+
+	state, err := app.states.State(context.Background(), app.userID, top)
+	if err != nil {
+		t.Fatalf("State: %v", err)
+	}
+	if want := (service.PostState{Place: service.PlaceReadingList, Read: true}); state != want {
+		t.Errorf("opened post is %+v, want %+v", state, want)
+	}
+	app.assertPlace(t, next, service.PlaceQueue)
+	assertContains(t, body, `id="queue"`, "Next post", "1 left")
+	assertNotContains(t, body, "Top post", "<html")
+}
+
 func TestQueue_TriagingTheLastPostRespondsWithAnEmptyQueue(t *testing.T) {
 	app := newTestApp(t)
 	last := app.post(t, "Last post", "", time.Now())
