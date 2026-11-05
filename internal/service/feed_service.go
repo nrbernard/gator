@@ -167,10 +167,10 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 			continue
 		}
 
-		// Handle 304 Not Modified response
+		// A 304 Not Modified counts as a fetch for the hourly limit.
 		if result.NotModified {
 			fmt.Printf("Feed %s not modified, updating headers only\n", feed.Name)
-			if err := s.Repo.UpdateFeedConditionalHeadersNoFetch(context.Background(), database.UpdateFeedConditionalHeadersNoFetchParams{
+			if err := s.Repo.UpdateFeedConditionalHeaders(context.Background(), database.UpdateFeedConditionalHeadersParams{
 				Etag:         sql.NullString{String: result.ETag, Valid: result.ETag != ""},
 				LastModified: sql.NullString{String: result.LastModified, Valid: result.LastModified != ""},
 				ID:           feed.ID,
