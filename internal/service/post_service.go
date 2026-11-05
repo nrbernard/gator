@@ -18,9 +18,17 @@ type PostService struct {
 	Clock *clock.Clock
 }
 
-// Cutoff is the cutoff for a Queue page loading now.
+// Cutoff is the cutoff for a Queue page loading now: the end of the last
+// complete second. gator records a Post's fetch to the second, so a Post
+// fetched in the current second, still open, counts as later.
 func (s *PostService) Cutoff() time.Time {
-	return s.Clock.Now()
+	return s.Clock.Now().Truncate(time.Second).Add(-time.Second)
+}
+
+// AwaitSecond waits for the current second to end, so the next Cutoff covers
+// every Post fetched so far.
+func (s *PostService) AwaitSecond(ctx context.Context) error {
+	return s.Clock.SleepUntil(ctx, s.Clock.Now().Truncate(time.Second).Add(time.Second))
 }
 
 // Queue returns the Queue as a page whose cutoff is cutoff sees it: the newest
@@ -32,11 +40,13 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID, cutoff time.T
 	if err != nil {
 		return models.Queue{}, err
 	}
-	// The chip reveals what it counted: Posts fetched by the moment it counts.
+	// The chip counts, and reveals, the Posts fetched since the cutoff up to
+	// the cutoff a page loading now would have.
 	newCutoff := s.Cutoff()
-	newCount, err := s.Repo.CountQueuePostsCreatedAfter(ctx, database.CountQueuePostsCreatedAfterParams{
-		UserID: userID.String(),
-		Cutoff: cutoff.UTC(),
+	newCount, err := s.Repo.CountQueuePostsCreatedBetween(ctx, database.CountQueuePostsCreatedBetweenParams{
+		UserID:    userID.String(),
+		Cutoff:    cutoff.UTC(),
+		NewCutoff: newCutoff.UTC(),
 	})
 	if err != nil {
 		return models.Queue{}, fmt.Errorf("count new posts: %w", err)

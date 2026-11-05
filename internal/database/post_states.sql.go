@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const countQueuePostsCreatedAfter = `-- name: CountQueuePostsCreatedAfter :one
+const countQueuePostsCreatedBetween = `-- name: CountQueuePostsCreatedBetween :one
 SELECT COUNT(*)
 FROM posts
 WHERE posts.feed_id IN (
@@ -21,16 +21,19 @@ WHERE posts.feed_id IN (
 )
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
 AND datetime(posts.created_at) > datetime(?2)
+AND datetime(posts.created_at) <= datetime(?3)
 `
 
-type CountQueuePostsCreatedAfterParams struct {
-	UserID string
-	Cutoff interface{}
+type CountQueuePostsCreatedBetweenParams struct {
+	UserID    string
+	Cutoff    interface{}
+	NewCutoff interface{}
 }
 
-// The Queue Posts gator fetched after the cutoff: the new Posts the chip counts.
-func (q *Queries) CountQueuePostsCreatedAfter(ctx context.Context, arg CountQueuePostsCreatedAfterParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedAfter, arg.UserID, arg.Cutoff)
+// The Queue Posts gator fetched after the cutoff and at or before the new
+// cutoff: the new Posts the chip counts, and reveals when tapped.
+func (q *Queries) CountQueuePostsCreatedBetween(ctx context.Context, arg CountQueuePostsCreatedBetweenParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedBetween, arg.UserID, arg.Cutoff, arg.NewCutoff)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

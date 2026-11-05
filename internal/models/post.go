@@ -26,12 +26,13 @@ type Post struct {
 type Queue struct {
 	Next  *Post
 	Count int
-	// Cutoff is the moment the Queue page loaded, or the chip last moved it.
-	// The page sends it with each Queue request, and trash all spares Posts
-	// fetched after it.
+	// Cutoff is the end of the last complete second when the Queue page
+	// loaded, or when the chip last moved it. The page sends it with each
+	// Queue request, and trash all spares Posts fetched after it.
 	Cutoff time.Time
-	// New is how many Queue Posts gator fetched after the cutoff, counted at
-	// NewCutoff. Tapping the chip moves the cutoff to NewCutoff.
+	// New is how many Queue Posts gator fetched after the cutoff and by
+	// NewCutoff, the cutoff a page loading now would have. Tapping the chip
+	// moves the cutoff to NewCutoff, revealing exactly those.
 	New       int
 	NewCutoff time.Time
 	// LastFetchedAt is when gator last fetched any of the user's Feeds, set

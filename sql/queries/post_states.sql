@@ -26,8 +26,9 @@ AND datetime(posts.created_at) <= datetime(@cutoff)
 ORDER BY posts.published_at DESC
 LIMIT 1;
 
--- name: CountQueuePostsCreatedAfter :one
--- The Queue Posts gator fetched after the cutoff: the new Posts the chip counts.
+-- name: CountQueuePostsCreatedBetween :one
+-- The Queue Posts gator fetched after the cutoff and at or before the new
+-- cutoff: the new Posts the chip counts, and reveals when tapped.
 SELECT COUNT(*)
 FROM posts
 WHERE posts.feed_id IN (
@@ -36,7 +37,8 @@ WHERE posts.feed_id IN (
     WHERE feed_follows.user_id = @user_id AND followed.removed_at IS NULL
 )
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
-AND datetime(posts.created_at) > datetime(@cutoff);
+AND datetime(posts.created_at) > datetime(@cutoff)
+AND datetime(posts.created_at) <= datetime(@new_cutoff);
 
 -- name: GetLastFetchedAt :one
 -- When gator last fetched any of the user's Feeds that they haven't removed,

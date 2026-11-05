@@ -1,7 +1,10 @@
 // Package clock wraps the time of day, so tests can stop and move it.
 package clock
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Clock tells the current time: the system's, or, for a null clock, a
 // stopped time that only Advance moves.
@@ -26,6 +29,29 @@ func (c *Clock) Now() time.Time {
 		return c.at
 	}
 	return time.Now()
+}
+
+// SleepUntil returns once the clock reaches t, or when ctx is done. A null
+// clock moves straight on to t instead of waiting.
+func (c *Clock) SleepUntil(ctx context.Context, t time.Time) error {
+	if c.null {
+		if t.After(c.at) {
+			c.at = t
+		}
+		return nil
+	}
+	wait := time.Until(t)
+	if wait <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Advance moves a null clock on by d. The system clock can't be moved.

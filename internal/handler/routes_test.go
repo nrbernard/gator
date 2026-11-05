@@ -257,11 +257,14 @@ func TestQueue_OpeningTheCardGoesToTheSiteAndKeepsThePostMarkedRead(t *testing.T
 }
 
 // fetchLater moves the app's clock on a minute, past any Queue page loaded so
-// far, and adds a Post gator fetched then.
+// far, adds a Post gator fetched then, and lets that second end, so the
+// Queue counts it as new.
 func (a *testApp) fetchLater(t *testing.T, title string) uuid.UUID {
 	t.Helper()
 	a.clock.Advance(time.Minute)
-	return a.postFetchedAt(t, title, a.clock.Now(), a.clock.Now())
+	id := a.postFetchedAt(t, title, a.clock.Now(), a.clock.Now())
+	a.clock.Advance(time.Second)
+	return id
 }
 
 var cutoffPattern = regexp.MustCompile(`"cutoff":\s*"([^"]+)"`)
@@ -986,8 +989,7 @@ func TestQueue_OpeningTheQueueChecksInTheBackgroundAfterTheFirstCard(t *testing.
 // gator records when it fetched a Post to the second, so a check in the same
 // second as the page load must still put what it fetches behind the chip.
 func TestQueue_ACheckRightAfterThePageLoadsKeepsTheCardStill(t *testing.T) {
-	// The system clock, which the database's fetch times share.
-	app := newTestAppOn(t, clock.New())
+	app := newTestApp(t)
 	app.serveFeed(t)
 	page := app.request(t, http.MethodGet, "/", nil).Body.String()
 	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
@@ -996,8 +998,34 @@ func TestQueue_ACheckRightAfterThePageLoadsKeepsTheCardStill(t *testing.T) {
 	card := app.request(t, http.MethodGet, "/queue/card?"+form, nil).Body.String()
 
 	assertContains(t, chip, ">1 new<")
-	assertContains(t, card, "caught up")
+	assertContains(t, card, "caught up", ">1 new<")
 	assertNotContains(t, card, "Freshly fetched")
+}
+
+// The Queue counts a Post from the second after its fetch's: one fetched in
+// the second the page loads is new, so the card, the count, the chip, and
+// trash all agree on which Posts the page has shown.
+func TestQueue_PostsFetchedInTheSecondThePageLoadsAreNew(t *testing.T) {
+	app := newTestAppOn(t, clock.NewNull(time.Date(2026, 11, 5, 10, 0, 0, 500_000_000, time.UTC)))
+	app.postFetchedAt(t, "Fetched the second before", time.Date(2026, 11, 5, 9, 0, 0, 0, time.UTC),
+		time.Date(2026, 11, 5, 9, 59, 59, 0, time.UTC))
+	app.postFetchedAt(t, "Fetched as the page loaded", time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 11, 5, 10, 0, 0, 0, time.UTC))
+
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	cutoff := url.QueryEscape(pageCutoff(t, page))
+	confirm := app.request(t, http.MethodGet, "/queue/trash-all?cutoff="+cutoff, nil).Body.String()
+
+	assertContains(t, page, "Fetched the second before", "1 left")
+	assertNotContains(t, page, "Fetched as the page loaded", " new<")
+	assertContains(t, confirm, "Trash 1 post")
+
+	app.clock.Advance(time.Second)
+	card := app.request(t, http.MethodGet, "/queue/card?cutoff="+cutoff, nil).Body.String()
+	assertContains(t, card, "Fetched the second before", ">1 new<")
+	tapped := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(chipCutoff(t, card)), nil).Body.String()
+	assertContains(t, tapped, "Fetched as the page loaded", "2 left")
+	assertNotContains(t, tapped, " new<")
 }
 
 func TestQueue_CheckNowFetchesFeedsAndCountsThePostsBehindTheChip(t *testing.T) {

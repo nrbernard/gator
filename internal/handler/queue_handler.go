@@ -99,24 +99,6 @@ func (h *QueueHandler) TrashAll(c echo.Context) error {
 	return c.Render(http.StatusOK, "queue", queue)
 }
 
-// waitPastSecond waits until the second after t's. gator records when it
-// fetched a Post to the second, and the Queue shows Posts fetched in its
-// cutoff's second, so a fetch in that second would change the card.
-func waitPastSecond(ctx context.Context, t time.Time) error {
-	wait := time.Until(t.Truncate(time.Second).Add(time.Second))
-	if wait <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
 // requestCutoff is the cutoff the Queue page sent, if it sent a valid one.
 func requestCutoff(c echo.Context) (time.Time, bool) {
 	cutoff, err := time.Parse(time.RFC3339Nano, c.FormValue("cutoff"))
@@ -141,11 +123,13 @@ func (h *QueueHandler) Check(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
 	}
 	ctx := c.Request().Context()
-	if err := waitPastSecond(ctx, cutoff); err != nil {
-		return err
-	}
 	if err := h.FeedService.ScrapeFeeds(ctx); err != nil {
 		return fmt.Errorf("failed to scrape feeds: %w", err)
+	}
+	// What the scrape fetched in the current second counts once it ends;
+	// wait for that, so the chip counts everything the check fetched.
+	if err := h.PostService.AwaitSecond(ctx); err != nil {
+		return err
 	}
 	queue, err := h.queue(ctx, userID, cutoff)
 	if err != nil {
