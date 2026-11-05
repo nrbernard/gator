@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>{{ template "head" "Archive" }}</head>
+  <body class="app">
+    <div class="shell shell-wide">
+      {{ template "header" "Archive" }}
+      <main class="pb-12 pt-2">
+        {{ template "archive" .Posts }}
+      </main>
+    </div>
+  </body>
+</html>

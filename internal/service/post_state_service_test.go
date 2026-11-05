@@ -158,6 +158,122 @@ func TestPostStateService_ToggleReadFlipsTheMarkOnAReadingListPost(t *testing.T)
 	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList})
 }
 
+func TestPostStateService_ArchiveMovesAReadingListPostToTheArchive(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Finished with it", time.Now())
+	if err := s.Open(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	if err := s.Archive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceArchive, Read: true})
+}
+
+func TestPostStateService_UnarchiveMovesAnArchivedPostBackToTheReadingList(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Worth rereading", time.Now())
+	if err := s.Open(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err := s.Archive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if err := s.Unarchive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Unarchive: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceReadingList, Read: true})
+}
+
+func TestPostStateService_TrashMovesAnArchivedPostToTheTrashFromTheArchive(t *testing.T) {
+	f := newFixture(t, setupTestDB(t))
+	s := &PostStateService{Repo: f.queries}
+	ctx := context.Background()
+	postID := f.post(t, "Not worth keeping", time.Now())
+	if err := s.Keep(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+	if err := s.Archive(ctx, f.userID, postID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if err := s.Trash(ctx, f.userID, postID, PlaceArchive); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	assertState(t, s, f.userID, postID, PostState{Place: PlaceTrash, TrashedFrom: PlaceArchive})
+}
+
+func TestPostStateService_RestoreReturnsATrashedPostWhereItCameFrom(t *testing.T) {
+	type move func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error
+	tests := []struct {
+		name    string
+		prepare []move
+		want    PostState
+	}{
+		{"from the Queue", []move{
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Trash(ctx, userID, postID, PlaceQueue)
+			},
+		}, PostState{Place: PlaceQueue}},
+		{"from the Reading list, keeping its Read mark", []move{
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Open(ctx, userID, postID)
+			},
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Trash(ctx, userID, postID, PlaceReadingList)
+			},
+		}, PostState{Place: PlaceReadingList, Read: true}},
+		{"from the Reading list, unread", []move{
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Keep(ctx, userID, postID)
+			},
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Trash(ctx, userID, postID, PlaceReadingList)
+			},
+		}, PostState{Place: PlaceReadingList}},
+		{"from the Archive", []move{
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Keep(ctx, userID, postID)
+			},
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Archive(ctx, userID, postID)
+			},
+			func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+				return s.Trash(ctx, userID, postID, PlaceArchive)
+			},
+		}, PostState{Place: PlaceArchive}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, setupTestDB(t))
+			s := &PostStateService{Repo: f.queries}
+			ctx := context.Background()
+			postID := f.post(t, "Trashed by mistake", time.Now())
+			for _, m := range tc.prepare {
+				if err := m(s, ctx, f.userID, postID); err != nil {
+					t.Fatalf("prepare: %v", err)
+				}
+			}
+
+			if err := s.Restore(ctx, f.userID, postID); err != nil {
+				t.Fatalf("Restore: %v", err)
+			}
+
+			assertState(t, s, f.userID, postID, tc.want)
+		})
+	}
+}
+
 func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	type move func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error
 	keep := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
@@ -173,6 +289,15 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 	}
 	toggleRead := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
 		return s.ToggleRead(ctx, userID, postID)
+	}
+	archive := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Archive(ctx, userID, postID)
+	}
+	unarchive := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Unarchive(ctx, userID, postID)
+	}
+	restore := func(s *PostStateService, ctx context.Context, userID, postID uuid.UUID) error {
+		return s.Restore(ctx, userID, postID)
 	}
 	trashed := PostState{Place: PlaceTrash, TrashedFrom: PlaceQueue}
 
@@ -190,6 +315,15 @@ func TestPostStateService_RejectsMovesThatDontApply(t *testing.T) {
 		{"open a trashed post", []move{trashFrom(PlaceQueue)}, open, trashed},
 		{"toggle read on a Queue post", nil, toggleRead, PostState{Place: PlaceQueue}},
 		{"toggle read on a trashed post", []move{trashFrom(PlaceQueue)}, toggleRead, trashed},
+		{"archive a Queue post", nil, archive, PostState{Place: PlaceQueue}},
+		{"archive an archived post", []move{keep, archive}, archive, PostState{Place: PlaceArchive}},
+		{"archive a trashed post", []move{trashFrom(PlaceQueue)}, archive, trashed},
+		{"unarchive a Queue post", nil, unarchive, PostState{Place: PlaceQueue}},
+		{"unarchive a Reading list post", []move{keep}, unarchive, PostState{Place: PlaceReadingList}},
+		{"trash an archived post seen on the Reading list", []move{keep, archive}, trashFrom(PlaceReadingList), PostState{Place: PlaceArchive}},
+		{"restore a Queue post", nil, restore, PostState{Place: PlaceQueue}},
+		{"restore a Reading list post", []move{open}, restore, PostState{Place: PlaceReadingList, Read: true}},
+		{"restore an archived post", []move{keep, archive}, restore, PostState{Place: PlaceArchive}},
 	}
 
 	for _, tc := range tests {

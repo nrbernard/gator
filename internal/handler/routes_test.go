@@ -95,8 +95,11 @@ func newTestApp(t *testing.T) *testApp {
 	Register(app.e, Handlers{
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
 		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
+		Archive:     &ArchiveHandler{PostService: posts, StateService: app.states},
+		Trash:       &TrashHandler{PostService: posts, StateService: app.states},
 		Post:        &PostHandler{PostService: posts},
 		Feed:        &FeedHandler{FeedService: feeds, UserService: &service.UserService{Repo: queries}},
+		StaticDir:   "../../static",
 	})
 	return app
 }
@@ -446,7 +449,7 @@ func TestReadingList_ListsKeptPosts(t *testing.T) {
 	assertNotContains(t, body, "Trashed post", "Queue post")
 }
 
-func TestReadingList_EachPostOffersOpenReadAndTrashOverHtmx(t *testing.T) {
+func TestReadingList_EachPostOffersOpenReadArchiveAndTrashOverHtmx(t *testing.T) {
 	app := newTestApp(t)
 	kept := app.post(t, "Kept post", "", time.Now())
 	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
@@ -457,7 +460,8 @@ func TestReadingList_EachPostOffersOpenReadAndTrashOverHtmx(t *testing.T) {
 
 	id := kept.String()
 	assertContains(t, body, `id="reading-list"`, "htmx",
-		`hx-post="/reading-list/`+id+`/open"`, `hx-post="/reading-list/`+id+`/read"`, `hx-post="/reading-list/`+id+`/trash"`,
+		`hx-post="/reading-list/`+id+`/open"`, `hx-post="/reading-list/`+id+`/read"`,
+		`hx-post="/reading-list/`+id+`/archive"`, `hx-post="/reading-list/`+id+`/trash"`,
 		">Mark read<")
 }
 
@@ -471,6 +475,7 @@ func TestReadingList_ActionsUpdateTheListInPlace(t *testing.T) {
 		// A read Post stays on the Reading list, offering to mark it unread.
 		{"open", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
 		{"read", service.PostState{Place: service.PlaceReadingList, Read: true}, []string{"Acted on", ">Mark unread<"}, nil},
+		{"archive", service.PostState{Place: service.PlaceArchive}, nil, []string{"Acted on"}},
 		{"trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceReadingList}, nil, []string{"Acted on"}},
 	}
 
@@ -528,7 +533,7 @@ func TestReadingList_RejectsActionsOnAPostNotOnTheReadingList(t *testing.T) {
 	app := newTestApp(t)
 	queued := app.post(t, "Queue post", "", time.Now())
 
-	for _, action := range []string{"read", "trash"} {
+	for _, action := range []string{"read", "archive", "trash"} {
 		rec := httptest.NewRecorder()
 		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/reading-list/"+queued.String()+"/"+action, nil))
 
@@ -537,6 +542,208 @@ func TestReadingList_RejectsActionsOnAPostNotOnTheReadingList(t *testing.T) {
 		}
 	}
 	app.assertPlace(t, queued, service.PlaceQueue)
+}
+
+// archive Keeps and then Archives each Post, in order.
+func (a *testApp) archive(t *testing.T, postIDs ...uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	for _, id := range postIDs {
+		if err := a.states.Keep(ctx, a.userID, id); err != nil {
+			t.Fatalf("Keep: %v", err)
+		}
+		if err := a.states.Archive(ctx, a.userID, id); err != nil {
+			t.Fatalf("Archive: %v", err)
+		}
+	}
+}
+
+func TestArchive_ListsArchivedPostsMostRecentlyArchivedFirst(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	// Published order is the reverse of archived order, so the test tells them apart.
+	first := app.post(t, "Archived first", "", now)
+	second := app.post(t, "Archived second", "", now.Add(-1*time.Hour))
+	kept := app.post(t, "Still on the Reading list", "", now)
+	app.post(t, "Queue post", "", now)
+	app.archive(t, first, second)
+	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/archive", nil).Body.String()
+
+	assertContains(t, body, `id="archive"`, "Archived first", "Archived second", "Example Feed",
+		"http://example.com/posts/"+first.String())
+	assertNotContains(t, body, "Still on the Reading list", "Queue post")
+	if strings.Index(body, "Archived second") > strings.Index(body, "Archived first") {
+		t.Errorf("Archived first is listed before Archived second; want most recently archived first")
+	}
+}
+
+func TestArchive_EachPostOffersMoveToReadingListAndTrashOverHtmx(t *testing.T) {
+	app := newTestApp(t)
+	archived := app.post(t, "Archived post", "", time.Now())
+	app.archive(t, archived)
+
+	body := app.request(t, http.MethodGet, "/archive", nil).Body.String()
+
+	id := archived.String()
+	assertContains(t, body, "htmx", `hx-post="/archive/`+id+`/unarchive"`, `hx-post="/archive/`+id+`/trash"`,
+		">Move to Reading list<", ">Trash<")
+}
+
+func TestArchive_ActionsUpdateTheListInPlace(t *testing.T) {
+	tests := []struct {
+		action string
+		want   service.PostState
+	}{
+		{"unarchive", service.PostState{Place: service.PlaceReadingList}},
+		{"trash", service.PostState{Place: service.PlaceTrash, TrashedFrom: service.PlaceArchive}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			app := newTestApp(t)
+			ctx := context.Background()
+			other := app.post(t, "Other archived post", "", time.Now())
+			acted := app.post(t, "Acted on", "", time.Now())
+			app.archive(t, other, acted)
+
+			body := app.request(t, http.MethodPost, "/archive/"+acted.String()+"/"+tc.action, nil).Body.String()
+
+			got, err := app.states.State(ctx, app.userID, acted)
+			if err != nil {
+				t.Fatalf("State: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("state = %+v, want %+v", got, tc.want)
+			}
+			assertContains(t, body, `id="archive"`, "Other archived post")
+			assertNotContains(t, body, "<html", "Acted on")
+		})
+	}
+}
+
+func TestArchive_EmptyArchiveSaysSo(t *testing.T) {
+	app := newTestApp(t)
+
+	body := app.request(t, http.MethodGet, "/archive", nil).Body.String()
+
+	assertContains(t, body, "Nothing in the Archive", `href="/reading-list"`)
+}
+
+func TestArchive_RejectsActionsOnAPostNotInTheArchive(t *testing.T) {
+	app := newTestApp(t)
+	kept := app.post(t, "Kept post", "", time.Now())
+	if err := app.states.Keep(context.Background(), app.userID, kept); err != nil {
+		t.Fatalf("Keep: %v", err)
+	}
+
+	for _, action := range []string{"unarchive", "trash"} {
+		rec := httptest.NewRecorder()
+		app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/archive/"+kept.String()+"/"+action, nil))
+
+		if rec.Code != http.StatusConflict {
+			t.Errorf("%s: status = %d, want %d", action, rec.Code, http.StatusConflict)
+		}
+	}
+	app.assertPlace(t, kept, service.PlaceReadingList)
+}
+
+func TestTrash_ListsTrashedPostsMostRecentlyTrashedFirst(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	now := time.Now()
+	// Published order is the reverse of trashed order, so the test tells them apart.
+	first := app.post(t, "Trashed first", "", now)
+	second := app.post(t, "Trashed second", "", now.Add(-1*time.Hour))
+	app.post(t, "Queue post", "", now)
+	if err := app.states.Trash(ctx, app.userID, first, service.PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+	app.archive(t, second)
+	if err := app.states.Trash(ctx, app.userID, second, service.PlaceArchive); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+
+	assertContains(t, body, `id="trash"`, "Trashed first", "Trashed second", "Example Feed",
+		"http://example.com/posts/"+first.String())
+	assertNotContains(t, body, "Queue post")
+	if strings.Index(body, "Trashed second") > strings.Index(body, "Trashed first") {
+		t.Errorf("Trashed first is listed before Trashed second; want most recently trashed first")
+	}
+}
+
+func TestTrash_EachPostOffersRestoreOverHtmx(t *testing.T) {
+	app := newTestApp(t)
+	trashed := app.post(t, "Trashed post", "", time.Now())
+	if err := app.states.Trash(context.Background(), app.userID, trashed, service.PlaceQueue); err != nil {
+		t.Fatalf("Trash: %v", err)
+	}
+
+	body := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+
+	assertContains(t, body, "htmx", `hx-post="/trash/`+trashed.String()+`/restore"`, ">Restore<")
+}
+
+func TestTrash_RestoreReturnsThePostAndUpdatesTheListInPlace(t *testing.T) {
+	app := newTestApp(t)
+	ctx := context.Background()
+	other := app.post(t, "Other trashed post", "", time.Now())
+	acted := app.post(t, "Acted on", "", time.Now())
+	for _, id := range []uuid.UUID{other, acted} {
+		if err := app.states.Trash(ctx, app.userID, id, service.PlaceQueue); err != nil {
+			t.Fatalf("Trash: %v", err)
+		}
+	}
+
+	body := app.request(t, http.MethodPost, "/trash/"+acted.String()+"/restore", nil).Body.String()
+
+	app.assertPlace(t, acted, service.PlaceQueue)
+	assertContains(t, body, `id="trash"`, "Other trashed post")
+	assertNotContains(t, body, "<html", "Acted on")
+}
+
+func TestTrash_EmptyTrashSaysSo(t *testing.T) {
+	app := newTestApp(t)
+
+	body := app.request(t, http.MethodGet, "/trash", nil).Body.String()
+
+	assertContains(t, body, "Nothing in the Trash")
+}
+
+func TestTrash_RejectsRestoreOfAPostNotInTheTrash(t *testing.T) {
+	app := newTestApp(t)
+	queued := app.post(t, "Queue post", "", time.Now())
+
+	rec := httptest.NewRecorder()
+	app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/trash/"+queued.String()+"/restore", nil))
+
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusConflict)
+	}
+	app.assertPlace(t, queued, service.PlaceQueue)
+}
+
+func TestNav_LinksToTheTrashFromEveryScreen(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, target := range []string{"/", "/reading-list", "/archive", "/trash"} {
+		body := app.request(t, http.MethodGet, target, nil).Body.String()
+		assertContains(t, body, `href="/trash"`)
+	}
+}
+
+func TestNav_LinksToTheArchiveFromEveryScreen(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, target := range []string{"/", "/reading-list", "/archive"} {
+		body := app.request(t, http.MethodGet, target, nil).Body.String()
+		assertContains(t, body, `href="/archive"`)
+	}
 }
 
 func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {

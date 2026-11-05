@@ -3,38 +3,46 @@
 {{ block "reading-list" . }}
 <section id="reading-list">
   {{ if . }}
-    <ul class="space-y-4">
+    <ul class="post-list">
       {{ range . }}
         {{ template "reading-list-item" . }}
       {{ end }}
     </ul>
   {{ else }}
-    <p class="text-gray-600 py-8">Nothing on the Reading list. Keep Posts from the <a href="/" class="text-blue-600 hover:text-blue-800">Queue</a>.</p>
+    <div class="empty-state">
+      <div class="empty-state-icon">{{ template "icon-book-open" "size-5" }}</div>
+      <h2 class="mt-5 text-xl font-semibold">Nothing on the Reading list</h2>
+      <p class="mt-1.5 text-sm text-white/60">Keep Posts from the <a href="/" class="text-link">Queue</a> to read them here.</p>
+    </div>
   {{ end }}
 </section>
 {{ end }}
 
 {{ block "reading-list-item" . }}
-<li id="post-{{ .ID }}" class="border-b border-neutral-200 pb-4">
-  <div class="flex justify-between text-sm text-gray-600 mb-1">
-    <span>{{ .FeedName }}</span>
-    <span>{{ .PublishedAt.Format "January 2, 2006" }}{{ if .IsRead }} · Read{{ end }}</span>
+<li id="post-{{ .ID }}" class="post-row{{ if .IsRead }} post-row-read{{ end }}">
+  <div class="min-w-0 flex-1">
+    <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time>{{ if .IsRead }} · Read{{ end }}</p>
+    {{/* Open: the link opens the Post in a new tab, and the click bubbles to
+         the span, which marks it Read. */}}
+    <span hx-post="/reading-list/{{ .ID }}/open" hx-trigger="click" hx-target="#reading-list" hx-swap="outerHTML">
+      <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+    </span>
+    {{ template "reading-list-actions" . }}
   </div>
-  {{/* Open: the link opens the Post in a new tab, and the click bubbles to
-       the span, which marks it Read. */}}
-  <span hx-post="/reading-list/{{ .ID }}/open" hx-trigger="click" hx-target="#reading-list" hx-swap="outerHTML">
-    <a href="{{ .Link }}" target="_blank" rel="noopener" class="text-xl font-semibold {{ if .IsRead }}text-gray-500{{ else }}text-gray-900{{ end }} hover:text-blue-600">{{ .Title }}</a>
-  </span>
-  {{ template "reading-list-actions" . }}
 </li>
 {{ end }}
 
 {{/* One button per move from the Reading list. */}}
 {{ block "reading-list-actions" . }}
-<div class="flex gap-2 mt-2 text-sm">
-  <button hx-post="/reading-list/{{ .ID }}/read" hx-target="#reading-list" hx-swap="outerHTML"
-    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">{{ if .IsRead }}Mark unread{{ else }}Mark read{{ end }}</button>
-  <button hx-post="/reading-list/{{ .ID }}/trash" hx-target="#reading-list" hx-swap="outerHTML"
-    class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
+<div class="row-actions">
+  <button hx-post="/reading-list/{{ .ID }}/read" hx-target="#reading-list" hx-swap="outerHTML" class="row-action">
+    {{ if .IsRead }}{{ template "icon-circle" "size-3.5" }}<span>Mark unread</span>{{ else }}{{ template "icon-circle-check" "size-3.5" }}<span>Mark read</span>{{ end }}
+  </button>
+  <button hx-post="/reading-list/{{ .ID }}/archive" hx-target="#reading-list" hx-swap="outerHTML" class="row-action">
+    {{ template "icon-archive" "size-3.5" }}<span>Archive</span>
+  </button>
+  <button hx-post="/reading-list/{{ .ID }}/trash" hx-target="#reading-list" hx-swap="outerHTML" class="row-action row-action-danger">
+    {{ template "icon-trash-2" "size-3.5" }}<span>Trash</span>
+  </button>
 </div>
 {{ end }}

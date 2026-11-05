@@ -56,7 +56,7 @@ func (h *QueueHandler) Card(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue-response", queue)
+	return c.Render(http.StatusOK, "queue", queue)
 }
 
 // ConfirmTrashAll asks before trashing the Queue, with the number of Posts
@@ -96,7 +96,7 @@ func (h *QueueHandler) TrashAll(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue-response", queue)
+	return c.Render(http.StatusOK, "queue", queue)
 }
 
 // waitPastSecond waits until the second after t's. gator records when it
@@ -193,7 +193,7 @@ func (h *QueueHandler) triage(c echo.Context, move func(context.Context, uuid.UU
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue-response", queue)
+	return c.Render(http.StatusOK, "queue", queue)
 }
 
 // moveError maps a rejected move to its HTTP status.

@@ -1,0 +1,41 @@
+{{/* The Archive: most recently archived first. Each per-Post action responds
+     with this block for htmx to swap in place. */}}
+{{ block "archive" . }}
+<section id="archive">
+  {{ if . }}
+    <ul class="post-list">
+      {{ range . }}
+        {{ template "archive-item" . }}
+      {{ end }}
+    </ul>
+  {{ else }}
+    <div class="empty-state">
+      <div class="empty-state-icon">{{ template "icon-archive" "size-5" }}</div>
+      <h2 class="mt-5 text-xl font-semibold">Nothing in the Archive</h2>
+      <p class="mt-1.5 text-sm text-white/60">Archive Posts you've finished from the <a href="/reading-list" class="text-link">Reading list</a>.</p>
+    </div>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ block "archive-item" . }}
+<li id="post-{{ .ID }}" class="post-row">
+  <div class="min-w-0 flex-1">
+    <p class="post-meta"><span class="font-medium text-white/80">{{ .FeedName }}</span> · <time datetime="{{ .PublishedAt.Format "2006-01-02T15:04:05Z07:00" }}">{{ .PublishedAt.Format "Jan 2, 2006" }}</time></p>
+    <a href="{{ .Link }}" target="_blank" rel="noopener" class="post-title">{{ .Title }}</a>
+    {{ template "archive-actions" . }}
+  </div>
+</li>
+{{ end }}
+
+{{/* One button per move from the Archive. */}}
+{{ block "archive-actions" . }}
+<div class="row-actions">
+  <button hx-post="/archive/{{ .ID }}/unarchive" hx-target="#archive" hx-swap="outerHTML" class="row-action">
+    {{ template "icon-archive-restore" "size-3.5" }}<span>Move to Reading list</span>
+  </button>
+  <button hx-post="/archive/{{ .ID }}/trash" hx-target="#archive" hx-swap="outerHTML" class="row-action row-action-danger">
+    {{ template "icon-trash-2" "size-3.5" }}<span>Trash</span>
+  </button>
+</div>
+{{ end }}

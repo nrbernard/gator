@@ -1,0 +1,63 @@
+{{/* The shell every page shares. A page is:
+
+     <!DOCTYPE html>
+     <html lang="en">
+       <head>{{ template "head" "Page title" }}</head>
+       <body class="app">
+         <div class="shell">
+           {{ template "header" "Page title" }}
+           <main>...</main>
+         </div>
+       </body>
+     </html>
+
+     The styles these classes use are in static/css/input.css. */}}
+
+{{/* "head" takes the page title. Everything it loads is served by the app. */}}
+{{ define "head" }}
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Gator is a simple RSS feed reader" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>{{ . }} · Gator</title>
+    <link rel="preload" href="/static/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link href="/static/css/output.css" rel="stylesheet" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐊</text></svg>" />
+    {{/* htmx 2.0.11, vendored from the htmx.org npm package. */}}
+    <script src="/static/js/htmx.min.js" defer></script>
+    <script src="/static/js/app.js" defer></script>
+{{ end }}
+
+{{/* "header" takes the page title. A page that needs more in its header (the Queue's
+     count and menu actions) writes its own <header class="app-header">, reusing
+     "menu-links" in its menu, as "queue-header" in queue.html does. */}}
+{{ define "header" }}
+<header class="app-header">
+  <h1 class="app-title">{{ . }}</h1>
+  {{ template "header-nav" . }}
+</header>
+{{ end }}
+
+{{/* "header-nav" takes the current page's title: a link to the Queue, and the menu.
+     The Queue writes its own (queue.html, "queue-header") to add its actions to the menu. */}}
+{{ define "header-nav" }}
+<nav class="header-nav" aria-label="Main">
+  <a href="/" class="nav-link">Queue</a>
+  <details class="menu" data-menu>
+    <summary class="icon-button" aria-label="Menu">{{ template "icon-ellipsis" "size-4" }}</summary>
+    <div class="menu-panel">
+      {{ template "menu-links" . }}
+    </div>
+  </details>
+</nav>
+{{ end }}
+
+{{/* "menu-links" takes the current page's title and marks that link. A page's own actions
+     go after them, below a <div class="menu-separator">, as .menu-item buttons. */}}
+{{ define "menu-links" }}
+<a href="/" class="menu-item"{{ if eq . "Queue" }} aria-current="page"{{ end }}>{{ template "icon-inbox" "size-4" }}Queue</a>
+<a href="/reading-list" class="menu-item"{{ if eq . "Reading list" }} aria-current="page"{{ end }}>{{ template "icon-book-open" "size-4" }}Reading list</a>
+<a href="/archive" class="menu-item"{{ if eq . "Archive" }} aria-current="page"{{ end }}>{{ template "icon-archive" "size-4" }}Archive</a>
+<a href="/trash" class="menu-item"{{ if eq . "Trash" }} aria-current="page"{{ end }}>{{ template "icon-trash-2" "size-4" }}Trash</a>
+<a href="/feeds" class="menu-item"{{ if eq . "Feeds" }} aria-current="page"{{ end }}>{{ template "icon-rss" "size-4" }}Feeds</a>
+{{ end }}
