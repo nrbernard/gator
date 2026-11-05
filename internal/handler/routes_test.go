@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -558,14 +559,18 @@ func TestSearch_FindsPostsByTitleAndDescriptionInEveryPlace(t *testing.T) {
 	assertNotContains(t, body, "Haystack", "<button", "/saved-posts/", "/read-posts/")
 }
 
-func TestQueue_RefreshFetchesFeedsAndRespondsWithTheQueue(t *testing.T) {
-	app := newTestApp(t)
+// serveFeed follows a Feed served with one item, "Freshly fetched", and
+// returns how many times it has been fetched. The fixture Feed's URL isn't
+// served, so it is marked fetched for the scrape to skip it.
+func (a *testApp) serveFeed(t *testing.T) *atomic.Int32 {
+	t.Helper()
 	ctx := context.Background()
-	// The fixture Feed's URL isn't served; mark it fetched so Refresh skips it.
-	if err := app.queries.MarkFeedAsFetched(ctx, app.feedID.String()); err != nil {
+	if err := a.queries.MarkFeedAsFetched(ctx, a.feedID.String()); err != nil {
 		t.Fatalf("MarkFeedAsFetched: %v", err)
 	}
+	var fetches atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetches.Add(1)
 		w.Header().Set("Content-Type", "application/rss+xml")
 		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>Served Feed</title><link>http://example.com</link><description>d</description>
@@ -574,16 +579,48 @@ func TestQueue_RefreshFetchesFeedsAndRespondsWithTheQueue(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	servedID := uuid.NewString()
-	if _, err := app.queries.CreateFeed(ctx, database.CreateFeedParams{ID: servedID, Name: "Served Feed", Url: server.URL, UserID: app.userID.String()}); err != nil {
+	if _, err := a.queries.CreateFeed(ctx, database.CreateFeedParams{ID: servedID, Name: "Served Feed", Url: server.URL, UserID: a.userID.String()}); err != nil {
 		t.Fatalf("create feed: %v", err)
 	}
-	if _, err := app.queries.CreateFeedFollow(ctx, database.CreateFeedFollowParams{ID: uuid.NewString(), UserID: app.userID.String(), FeedID: servedID}); err != nil {
+	if _, err := a.queries.CreateFeedFollow(ctx, database.CreateFeedFollowParams{ID: uuid.NewString(), UserID: a.userID.String(), FeedID: servedID}); err != nil {
 		t.Fatalf("follow feed: %v", err)
 	}
+	return &fetches
+}
 
-	body := app.request(t, http.MethodPost, "/queue/refresh", nil).Body.String()
+func TestQueue_OpeningTheQueueChecksInTheBackgroundAfterTheFirstCard(t *testing.T) {
+	app := newTestApp(t)
+	fetches := app.serveFeed(t)
+	app.post(t, "A post", "", time.Now())
 
-	assertContains(t, body, `id="queue"`, "Freshly fetched", "Served Feed", "1 left")
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	if fetches.Load() != 0 {
+		t.Errorf("loading the page fetched the served feed %d times, want 0", fetches.Load())
+	}
+	assertContains(t, body, "A post", `hx-post="/queue/check" hx-trigger="load"`, ">Check now<")
+	assertNotContains(t, body, "Refresh", "/queue/refresh")
+}
+
+func TestQueue_CheckNowFetchesFeedsAndCountsThePostsBehindTheChip(t *testing.T) {
+	app := newTestApp(t)
+	fetches := app.serveFeed(t)
+	pageLoad := time.Now().Add(-time.Minute)
+
+	form := url.Values{"cutoff": {pageLoad.UTC().Format(time.RFC3339Nano)}}.Encode()
+	body := app.request(t, http.MethodPost, "/queue/check", strings.NewReader(form)).Body.String()
+
+	if fetches.Load() != 1 {
+		t.Errorf("served feed fetched %d times, want 1", fetches.Load())
+	}
+	assertContains(t, body, `id="queue-new"`, ">1 new<")
+	assertNotContains(t, body, `id="queue"`, "Freshly fetched")
+
+	rec := httptest.NewRecorder()
+	app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/queue/refresh", nil))
+	if rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST /queue/refresh: status %d, want the route gone", rec.Code)
+	}
 }
 
 func TestQueue_HasNoTabsOrToggleButtons(t *testing.T) {

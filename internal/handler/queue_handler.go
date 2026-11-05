@@ -110,22 +110,27 @@ func (h *QueueHandler) queue(ctx context.Context, userID uuid.UUID, cutoff time.
 	return h.PostService.Queue(ctx, userID, cutoff)
 }
 
-// Refresh fetches the Feeds due a fetch and responds with the top of the Queue.
-func (h *QueueHandler) Refresh(c echo.Context) error {
+// Check fetches the Feeds due a fetch and responds with the chip. What it
+// fetched waits behind the chip, so the card doesn't change. The Queue page
+// sends it when it loads, and check now sends it on demand.
+func (h *QueueHandler) Check(c echo.Context) error {
 	userID, err := currentUserID(c)
 	if err != nil {
 		return err
+	}
+	cutoff, ok := requestCutoff(c)
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
 	}
 	ctx := c.Request().Context()
 	if err := h.FeedService.ScrapeFeeds(ctx); err != nil {
 		return fmt.Errorf("failed to scrape feeds: %w", err)
 	}
-	// Refreshing shows what it fetched, so it moves the cutoff to now.
-	queue, err := h.queue(ctx, userID, time.Now())
+	queue, err := h.queue(ctx, userID, cutoff)
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue-response", queue)
+	return c.Render(http.StatusOK, "queue-new", queue)
 }
 
 // Keep moves the Post to the Reading list and responds with the next card.

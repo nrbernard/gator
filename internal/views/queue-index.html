@@ -15,9 +15,13 @@
 
         <h2 class="text-2xl font-semibold text-gray-900 mb-6">Queue</h2>
 
-        {{ template "posts-refresh" . }}
+        {{ template "queue-new" .Queue }}
 
         {{ template "queue" .Queue }}
+
+        {{/* Once the page has loaded, check for new Posts in the background.
+             They arrive behind the chip. */}}
+        <div hx-post="/queue/check" hx-trigger="load" hx-swap="none" hx-vals='{"cutoff": "{{ .Queue.CutoffParam }}"}'></div>
 
         {{ template "posts-search" . }}
 
