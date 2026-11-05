@@ -60,7 +60,37 @@
     <span>{{ .PublishedAt.Format "January 2, 2006" }}{{ if .IsRead }} · Read{{ end }}</span>
   </div>
   <span class="inline-block text-xs uppercase tracking-wide text-gray-500 mb-1">{{ .Place.Label }}</span>
-  <a href="{{ .Link }}" target="_blank" rel="noopener" class="block text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
+  {{ if or (eq .Place "queue") (eq .Place "reading_list") }}
+    {{/* Open: the link opens the Post in a new tab, and the click bubbles to
+         the span, which Keeps it or marks it Read. */}}
+    <span hx-post="/search/{{ .ID }}/open" hx-trigger="click" hx-target="#search-result-{{ .ID }}" hx-swap="outerHTML">
+      <a href="{{ .Link }}" target="_blank" rel="noopener" class="block text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
+    </span>
+  {{ else }}
+    <a href="{{ .Link }}" target="_blank" rel="noopener" class="block text-xl font-semibold text-gray-900 hover:text-blue-600">{{ .Title }}</a>
+  {{ end }}
   <p class="text-gray-700 line-clamp-3">{{ .Description }}</p>
+  {{ template "search-result-actions" . }}
 </li>
+{{ end }}
+
+{{/* The result's Place's actions, each swapping the result in place. Trash
+     sends the Place the result shows, so a stale result can't trash a Post
+     that has since moved. */}}
+{{ block "search-result-actions" . }}
+<div class="flex gap-2 mt-2 text-sm" hx-target="#search-result-{{ .ID }}" hx-swap="outerHTML">
+  {{ if eq .Place "queue" }}
+    <button hx-post="/search/{{ .ID }}/keep" class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Keep</button>
+  {{ else if eq .Place "reading_list" }}
+    <button hx-post="/search/{{ .ID }}/read" class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">{{ if .IsRead }}Mark unread{{ else }}Mark read{{ end }}</button>
+    <button hx-post="/search/{{ .ID }}/archive" class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Archive</button>
+  {{ else if eq .Place "archive" }}
+    <button hx-post="/search/{{ .ID }}/unarchive" class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Move to Reading list</button>
+  {{ else if eq .Place "trash" }}
+    <button hx-post="/search/{{ .ID }}/restore" class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Restore</button>
+  {{ end }}
+  {{ if ne .Place "trash" }}
+    <button hx-post="/search/{{ .ID }}/trash" hx-vals='{"from": "{{ .Place }}"}' class="px-3 py-1 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Trash</button>
+  {{ end }}
+</div>
 {{ end }}

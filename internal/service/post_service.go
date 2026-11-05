@@ -169,6 +169,33 @@ func (s *PostService) SearchPosts(ctx context.Context, userID uuid.UUID, query s
 	return results, nil
 }
 
+// SearchResult returns one Post as search shows it, with its current Place.
+func (s *PostService) SearchResult(ctx context.Context, userID, postID uuid.UUID) (SearchResult, error) {
+	row, err := s.Repo.GetSearchResult(ctx, database.GetSearchResultParams{
+		UserID: userID.String(),
+		PostID: postID.String(),
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return SearchResult{}, fmt.Errorf("%w: %s", ErrPostNotFound, postID)
+	}
+	if err != nil {
+		return SearchResult{}, fmt.Errorf("get search result: %w", err)
+	}
+	return SearchResult{
+		Post: models.Post{
+			ID:          uuid.MustParse(row.ID),
+			Title:       row.Title,
+			Link:        row.Url,
+			Description: row.Description.String,
+			PublishedAt: row.PublishedAt,
+			FeedID:      uuid.MustParse(row.FeedID),
+			FeedName:    row.FeedName,
+			IsRead:      row.ReadAt.Valid,
+		},
+		Place: placeOf(row.Place),
+	}, nil
+}
+
 // placeOf is the Place a post_states place column records: NULL is the Queue.
 func placeOf(place sql.NullString) Place {
 	if !place.Valid {

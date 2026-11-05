@@ -44,6 +44,13 @@ func Register(e *echo.Echo, h Handlers) {
 	e.POST("/trash/:id/restore", h.Trash.Restore)
 
 	e.POST("/search", h.Post.Search)
+	e.POST("/search/:id/keep", h.Post.Keep)
+	e.POST("/search/:id/open", h.Post.Open)
+	e.POST("/search/:id/read", h.Post.ToggleRead)
+	e.POST("/search/:id/archive", h.Post.Archive)
+	e.POST("/search/:id/unarchive", h.Post.Unarchive)
+	e.POST("/search/:id/trash", h.Post.Trash)
+	e.POST("/search/:id/restore", h.Post.Restore)
 
 	e.GET("/feeds", h.Feed.Index)
 	e.POST("/feeds", h.Feed.Create)

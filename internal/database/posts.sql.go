@@ -90,6 +90,51 @@ func (q *Queries) GetPostsByUser(ctx context.Context, arg GetPostsByUserParams) 
 	return items, nil
 }
 
+const getSearchResult = `-- name: GetSearchResult :one
+SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id,
+       post_states.place, post_states.read_at
+FROM posts
+JOIN feeds ON posts.feed_id = feeds.id
+LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id = ?1
+WHERE posts.id = ?2
+AND feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+`
+
+type GetSearchResultParams struct {
+	UserID string
+	PostID string
+}
+
+type GetSearchResultRow struct {
+	ID          string
+	Title       string
+	Url         string
+	Description sql.NullString
+	PublishedAt time.Time
+	FeedName    string
+	FeedID      string
+	Place       sql.NullString
+	ReadAt      sql.NullTime
+}
+
+// One Post as SearchPostsByUser returns it, to re-render a result after an action.
+func (q *Queries) GetSearchResult(ctx context.Context, arg GetSearchResultParams) (GetSearchResultRow, error) {
+	row := q.db.QueryRowContext(ctx, getSearchResult, arg.UserID, arg.PostID)
+	var i GetSearchResultRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Url,
+		&i.Description,
+		&i.PublishedAt,
+		&i.FeedName,
+		&i.FeedID,
+		&i.Place,
+		&i.ReadAt,
+	)
+	return i, err
+}
+
 const searchPostsByUser = `-- name: SearchPostsByUser :many
 SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id,
        post_states.place, post_states.read_at
