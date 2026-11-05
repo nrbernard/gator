@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-Status: ready-for-agent
+Status: done
 
 - [ ] The Queue matches variant D at phone size and at desktop width (manual check against the prototype)
 - [ ] Keep and Trash sit in the same place on screen whatever the length of the card's content

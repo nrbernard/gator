@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-Status: ready-for-agent
+Status: done
 
 - [ ] State service: Open on a Reading list Post marks it Read and leaves it on the Reading list
 - [ ] State service: toggling Read flips the mark on a Reading list Post and is rejected for Posts in other places

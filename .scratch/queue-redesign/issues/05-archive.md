@@ -4,7 +4,7 @@
 
 **Blocked by:** 04
 
-Status: ready-for-agent
+Status: done
 
 - [ ] State service: Archive moves a Reading list Post to the Archive, and is rejected for a Queue Post
 - [ ] State service: Un-archive moves an archived Post back to the Reading list

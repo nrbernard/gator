@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-Status: ready-for-agent
+Status: done
 
 - [ ] State service: Open on a Queue Post moves it to the Reading list marked Read
 - [ ] State service: trash all moves every Queue Post created at or before the cutoff to the Trash, with the Queue as its origin, and leaves Posts created after the cutoff in the Queue

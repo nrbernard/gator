@@ -6,7 +6,7 @@ Interim behaviour until later tickets: today's Refresh button stays on the Queue
 
 **Blocked by:** None (can start immediately)
 
-Status: ready-for-agent
+Status: done
 
 - [ ] The state migration is additive: the previous release's code still runs against the migrated schema
 - [ ] Backfill test: migrate to the version before the state table, seed Posts with each combination of saved and read, apply the rest, and assert that saved Posts are on the Reading list with their Read mark, unsaved read Posts are in the Trash with the Queue as their origin, and unsaved unread Posts are in the Queue

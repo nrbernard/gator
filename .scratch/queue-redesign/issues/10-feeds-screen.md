@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02, 07
 
-Status: ready-for-agent
+Status: done
 
 - [ ] Each Feed shows its last fetch time and, when present, its last error
 - [ ] Removing a Feed takes its Queue Posts out of the Queue and its count, and leaves its Reading list, Archive, and Trash Posts in place with the Feed's name

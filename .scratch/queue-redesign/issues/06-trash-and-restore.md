@@ -4,7 +4,7 @@
 
 **Blocked by:** 04, 05
 
-Status: ready-for-agent
+Status: done
 
 - [ ] State service: Restore returns a Post trashed from the Queue to the Queue, one trashed from the Reading list to the Reading list (keeping its Read mark), and one trashed from the Archive to the Archive
 - [ ] State service: Restore is rejected for a Post that isn't in the Trash

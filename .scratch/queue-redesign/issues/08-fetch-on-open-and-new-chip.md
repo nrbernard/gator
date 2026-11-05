@@ -4,7 +4,7 @@
 
 **Blocked by:** 03
 
-Status: ready-for-agent
+Status: done
 
 - [ ] Opening the Queue triggers a background scrape without delaying the first card
 - [ ] Posts fetched after the page loaded don't change the current card or the count; the chip shows how many there are

@@ -4,7 +4,7 @@
 
 **Blocked by:** 06
 
-Status: ready-for-agent
+Status: done
 
 - [ ] A search finds matching Posts in each of the four places
 - [ ] Each result shows its place and offers that place's actions, and an action updates the result in place

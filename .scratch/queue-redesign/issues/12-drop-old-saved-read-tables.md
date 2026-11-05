@@ -11,3 +11,7 @@ Status: ready-for-agent
 - [ ] Their queries and generated code are gone (`make generate`), and the generated-code check passes
 - [ ] The obsolete scripts are removed
 - [ ] `make check` passes
+
+## Comments
+
+2026-11-05: Held back from the `queue-redesign` integration branch, which carries 01–11. The first criterion needs the release in production to have stopped reading `post_saves` and `post_reads`; until `queue-redesign` is deployed, production still reads them, so the drop has to ship in a later release. The branch's app code no longer reads either table; `sql/queries/saved_posts.sql` and `read_posts.sql` remain only for `scripts/mark_read.go`.

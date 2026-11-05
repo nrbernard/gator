@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-Status: ready-for-agent
+Status: done
 
 - [ ] The manifest is served and linked from every page, with a name, the icon, a start URL of the Queue, and a standalone display
 - [ ] The icon replaces the emoji favicon and is served at the sizes the home screen needs

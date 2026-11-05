@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-Status: ready-for-agent
+Status: done
 
 - [ ] Scrape test: with one failing Feed and one working Feed, the working Feed's Posts are created and the failing Feed records its error and the time
 - [ ] Scrape test: a Feed with a recorded error that then fetches successfully has its error cleared
