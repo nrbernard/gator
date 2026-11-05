@@ -17,6 +17,12 @@ type PostHandler struct {
 	StateService *service.PostStateService
 }
 
+// Index renders the Search page; its box posts to Search as the user types.
+func (h *PostHandler) Index(c echo.Context) error {
+	return c.Render(http.StatusOK, "search-index.html", map[string]any{})
+}
+
+// Search responds with the results for the query, for htmx to swap in.
 func (h *PostHandler) Search(c echo.Context) error {
 	userID, err := currentUserID(c)
 	if err != nil {

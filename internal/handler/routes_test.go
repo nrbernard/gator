@@ -747,6 +747,20 @@ func TestNav_LinksToTheArchiveFromEveryScreen(t *testing.T) {
 	}
 }
 
+func TestSearch_HasItsOwnPageLinkedFromEveryScreen(t *testing.T) {
+	app := newTestApp(t)
+
+	for _, target := range []string{"/", "/reading-list", "/archive", "/trash", "/search"} {
+		body := app.request(t, http.MethodGet, target, nil).Body.String()
+		assertContains(t, body, `href="/search"`)
+	}
+
+	page := app.request(t, http.MethodGet, "/search", nil).Body.String()
+	assertContains(t, page, "<html", `name="search"`, `hx-post="/search"`, `id="search-results"`)
+	readingList := app.request(t, http.MethodGet, "/reading-list", nil).Body.String()
+	assertNotContains(t, readingList, `hx-post="/search"`, `id="search-results"`)
+}
+
 // searchResult is the markup of one search result, from its opening tag to its
 // close, failing the test if the response has no result for the Post.
 func searchResult(t *testing.T, body string, postID uuid.UUID) string {
