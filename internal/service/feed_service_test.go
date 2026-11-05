@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"database/sql"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +98,180 @@ func TestFeedService_ScrapeFeeds_WithConditionalRequests(t *testing.T) {
 
 	if feeds[0].LastModified.String != "Wed, 21 Oct 2015 07:28:00 GMT" {
 		t.Errorf("Expected LastModified %q, got %q", "Wed, 21 Oct 2015 07:28:00 GMT", feeds[0].LastModified.String)
+	}
+}
+
+const testRSS = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+	<channel>
+		<title>Working Feed</title>
+		<link>https://example.com</link>
+		<description>Works</description>
+		<item>
+			<title>A Post</title>
+			<link>https://example.com/a-post</link>
+			<description>Hello</description>
+			<pubDate>Wed, 01 Jan 2024 12:00:00 GMT</pubDate>
+		</item>
+	</channel>
+</rss>`
+
+func serveRSS(t *testing.T) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func serveStatus(t *testing.T, status int) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// createFollowedFeed creates a user-followed Feed at url and returns its ID.
+func createFollowedFeed(t *testing.T, queries *database.Queries, userID, name, url string) string {
+	t.Helper()
+	ctx := context.Background()
+	feedID := uuid.New().String()
+	if _, err := queries.CreateFeed(ctx, database.CreateFeedParams{
+		ID:     feedID,
+		Name:   name,
+		Url:    url,
+		UserID: userID,
+	}); err != nil {
+		t.Fatalf("Failed to create feed: %v", err)
+	}
+	if _, err := queries.CreateFeedFollow(ctx, database.CreateFeedFollowParams{
+		ID:     uuid.New().String(),
+		UserID: userID,
+		FeedID: feedID,
+	}); err != nil {
+		t.Fatalf("Failed to follow feed: %v", err)
+	}
+	return feedID
+}
+
+func createTestUser(t *testing.T, queries *database.Queries) string {
+	t.Helper()
+	userID := uuid.New().String()
+	if _, err := queries.CreateUser(context.Background(), database.CreateUserParams{
+		ID:   userID,
+		Name: "Test User",
+	}); err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
+	return userID
+}
+
+func TestFeedService_ScrapeFeeds_FailingFeedDoesNotStopOthers(t *testing.T) {
+	queries := setupTestDB(t)
+	ctx := context.Background()
+	userID := createTestUser(t, queries)
+
+	failing := serveStatus(t, http.StatusInternalServerError)
+	working := serveRSS(t)
+	// Created first so it is fetched first, ahead of the working Feed.
+	createFollowedFeed(t, queries, userID, "Failing", failing.URL)
+	workingID := createFollowedFeed(t, queries, userID, "Working", working.URL)
+
+	before := time.Now().Add(-time.Second)
+	svc := &FeedService{Repo: queries}
+	if err := svc.ScrapeFeeds(ctx); err != nil {
+		t.Fatalf("ScrapeFeeds returned error: %v", err)
+	}
+
+	posts, err := queries.GetPostsByUser(ctx, database.GetPostsByUserParams{UserID: userID, Limit: 10})
+	if err != nil {
+		t.Fatalf("Failed to get posts: %v", err)
+	}
+	if len(posts) != 1 || posts[0].FeedID != workingID || posts[0].Title != "A Post" {
+		t.Fatalf("Expected the working Feed's one Post, got %+v", posts)
+	}
+
+	failed, err := queries.GetFeedByUrl(ctx, failing.URL)
+	if err != nil {
+		t.Fatalf("Failed to get failing feed: %v", err)
+	}
+	if !failed.LastFetchError.Valid || !strings.Contains(failed.LastFetchError.String, "500") {
+		t.Errorf("Expected the failing Feed's error to mention 500, got %+v", failed.LastFetchError)
+	}
+	if !failed.LastFetchErrorAt.Valid || failed.LastFetchErrorAt.Time.Before(before) {
+		t.Errorf("Expected the failing Feed's error time to be set to now, got %+v", failed.LastFetchErrorAt)
+	}
+
+	ok, err := queries.GetFeedByUrl(ctx, working.URL)
+	if err != nil {
+		t.Fatalf("Failed to get working feed: %v", err)
+	}
+	if ok.LastFetchError.Valid || ok.LastFetchErrorAt.Valid {
+		t.Errorf("Expected the working Feed to have no error, got %+v at %+v", ok.LastFetchError, ok.LastFetchErrorAt)
+	}
+}
+
+func TestFeedService_ScrapeFeeds_SuccessClearsError(t *testing.T) {
+	tests := []struct {
+		name   string
+		server func(t *testing.T) *httptest.Server
+	}{
+		{"new content", serveRSS},
+		{"not modified", func(t *testing.T) *httptest.Server { return serveStatus(t, http.StatusNotModified) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queries := setupTestDB(t)
+			ctx := context.Background()
+			userID := createTestUser(t, queries)
+			server := tt.server(t)
+			feedID := createFollowedFeed(t, queries, userID, "Recovered", server.URL)
+			if err := queries.RecordFeedFetchError(ctx, database.RecordFeedFetchErrorParams{
+				LastFetchError: sql.NullString{String: "status code: 500", Valid: true},
+				ID:             feedID,
+			}); err != nil {
+				t.Fatalf("Failed to record fetch error: %v", err)
+			}
+
+			svc := &FeedService{Repo: queries}
+			if err := svc.ScrapeFeeds(ctx); err != nil {
+				t.Fatalf("ScrapeFeeds returned error: %v", err)
+			}
+
+			feed, err := queries.GetFeedByUrl(ctx, server.URL)
+			if err != nil {
+				t.Fatalf("Failed to get feed: %v", err)
+			}
+			if feed.LastFetchError.Valid || feed.LastFetchErrorAt.Valid {
+				t.Errorf("Expected the error to be cleared, got %+v at %+v", feed.LastFetchError, feed.LastFetchErrorAt)
+			}
+		})
+	}
+}
+
+func TestFeedService_ScrapeFeeds_RateLimitedFeedIsSkippedWithoutError(t *testing.T) {
+	queries := setupTestDB(t)
+	ctx := context.Background()
+	userID := createTestUser(t, queries)
+	server := serveStatus(t, http.StatusTooManyRequests)
+	createFollowedFeed(t, queries, userID, "Rate limited", server.URL)
+
+	svc := &FeedService{Repo: queries}
+	if err := svc.ScrapeFeeds(ctx); err != nil {
+		t.Fatalf("ScrapeFeeds returned error: %v", err)
+	}
+
+	feed, err := queries.GetFeedByUrl(ctx, server.URL)
+	if err != nil {
+		t.Fatalf("Failed to get feed: %v", err)
+	}
+	if feed.LastFetchError.Valid || feed.LastFetchErrorAt.Valid || feed.LastFetchedAt.Valid {
+		t.Errorf("Expected a 429 to leave the Feed untouched, got error %+v at %+v, fetched %+v",
+			feed.LastFetchError, feed.LastFetchErrorAt, feed.LastFetchedAt)
 	}
 }
 
