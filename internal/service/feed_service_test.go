@@ -52,7 +52,8 @@ func setupTestSQLDB(t *testing.T) *sql.DB {
 }
 
 func TestFeedService_ScrapeFeeds_WithConditionalRequests(t *testing.T) {
-	queries := setupTestDB(t)
+	db := setupTestSQLDB(t)
+	queries := database.New(db)
 
 	ctx := context.Background()
 
@@ -79,19 +80,15 @@ func TestFeedService_ScrapeFeeds_WithConditionalRequests(t *testing.T) {
 		t.Fatalf("Failed to create feed: %v", err)
 	}
 
-	// Set up conditional headers for the feed
-	err = queries.UpdateFeedConditionalHeadersNoFetch(ctx, database.UpdateFeedConditionalHeadersNoFetchParams{
-		Etag:         sql.NullString{String: `"test-etag"`, Valid: true},
-		LastModified: sql.NullString{String: "Wed, 21 Oct 2015 07:28:00 GMT", Valid: true},
-		ID:           feedID,
-	})
-	if err != nil {
+	// Set up conditional headers for the feed, without marking it fetched
+	if _, err := db.Exec("UPDATE feeds SET etag = ?, last_modified = ? WHERE id = ?",
+		`"test-etag"`, "Wed, 21 Oct 2015 07:28:00 GMT", feedID); err != nil {
 		t.Fatalf("Failed to set conditional headers: %v", err)
 	}
 
 	// Test that the feed is included in feeds to fetch (new feeds should be fetched)
-	cutoff := time.Now().Add(-1 * time.Hour)
-	feeds, err := queries.GetFeedsToFetch(ctx, sql.NullTime{Time: cutoff, Valid: true})
+	cutoff := time.Now().Add(-1 * time.Hour).UTC()
+	feeds, err := queries.GetFeedsToFetch(ctx, cutoff)
 	if err != nil {
 		t.Fatalf("Failed to get feeds to fetch: %v", err)
 	}
@@ -400,8 +397,8 @@ func TestFeedService_ScrapeFeeds_PollingFrequency(t *testing.T) {
 	}
 
 	// Test that the feed is NOT included in feeds to fetch (due to 1-hour limit)
-	cutoff := time.Now().Add(-1 * time.Hour)
-	feeds, err := queries.GetFeedsToFetch(ctx, sql.NullTime{Time: cutoff, Valid: true})
+	cutoff := time.Now().Add(-1 * time.Hour).UTC()
+	feeds, err := queries.GetFeedsToFetch(ctx, cutoff)
 	if err != nil {
 		t.Fatalf("Failed to get feeds to fetch: %v", err)
 	}

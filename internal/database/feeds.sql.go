@@ -392,21 +392,3 @@ func (q *Queries) UpdateFeedConditionalHeaders(ctx context.Context, arg UpdateFe
 	_, err := q.db.ExecContext(ctx, updateFeedConditionalHeaders, arg.Etag, arg.LastModified, arg.ID)
 	return err
 }
-
-const updateFeedConditionalHeadersNoFetch = `-- name: UpdateFeedConditionalHeadersNoFetch :exec
-UPDATE feeds 
-SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP,
-    last_fetch_error = NULL, last_fetch_error_at = NULL
-WHERE id = ?
-`
-
-type UpdateFeedConditionalHeadersNoFetchParams struct {
-	Etag         sql.NullString
-	LastModified sql.NullString
-	ID           string
-}
-
-func (q *Queries) UpdateFeedConditionalHeadersNoFetch(ctx context.Context, arg UpdateFeedConditionalHeadersNoFetchParams) error {
-	_, err := q.db.ExecContext(ctx, updateFeedConditionalHeadersNoFetch, arg.Etag, arg.LastModified, arg.ID)
-	return err
-}
