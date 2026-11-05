@@ -124,9 +124,10 @@ func (s *FeedService) RemoveFeed(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
-	// Change from 24 hours to 1 hour to respect the "once per hour" limit
-	cutoff := time.Now().Add(-1 * time.Hour)
-	feeds, err := s.Repo.GetFeedsToFetch(ctx, sql.NullTime{Time: cutoff, Valid: true})
+	// Each Feed is fetched at most once an hour, whether its last attempt
+	// succeeded or failed.
+	cutoff := time.Now().Add(-1 * time.Hour).UTC()
+	feeds, err := s.Repo.GetFeedsToFetch(ctx, cutoff)
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %s", err)
 	}
@@ -151,15 +152,15 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 		// Use conditional request
 		result, err := feedparser.FetchFeedWithConditionals(context.Background(), feed.Url, etag, lastModified)
 		if err != nil {
-			// Handle rate limiting (429) with exponential backoff
-			if strings.Contains(err.Error(), "status code: 429") {
-				fmt.Printf("Rate limited for feed %s, skipping for now\n", feed.Name)
-				continue
+			// Record the failure on this Feed, which holds it off until the
+			// hour is up, and carry on with the rest.
+			message := err.Error()
+			if strings.Contains(message, "status code: 429") {
+				message = "rate limited"
 			}
-			// Record the failure on this Feed and carry on with the rest.
 			fmt.Printf("failed to fetch feed %s: %s\n", feed.Name, err)
 			if err := s.Repo.RecordFeedFetchError(ctx, database.RecordFeedFetchErrorParams{
-				LastFetchError: sql.NullString{String: err.Error(), Valid: true},
+				LastFetchError: sql.NullString{String: message, Valid: true},
 				ID:             feed.ID,
 			}); err != nil {
 				return fmt.Errorf("failed to record fetch error for feed %s: %s", feed.Name, err)

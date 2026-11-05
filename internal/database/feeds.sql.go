@@ -234,12 +234,15 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 const getFeedsToFetch = `-- name: GetFeedsToFetch :many
 SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at, removed_at FROM feeds
 WHERE removed_at IS NULL
-AND (last_fetched_at IS NULL OR last_fetched_at < ?)
+AND (last_fetched_at IS NULL OR datetime(last_fetched_at) < datetime(?1))
+AND (last_fetch_error_at IS NULL OR datetime(last_fetch_error_at) < datetime(?1))
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
 `
 
-func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTime) ([]Feed, error) {
-	rows, err := q.db.QueryContext(ctx, getFeedsToFetch, lastFetchedAt)
+// The Feeds due a fetch: neither fetched nor failed since the cutoff, so a
+// failing Feed waits out the same hourly limit as one that fetched.
+func (q *Queries) GetFeedsToFetch(ctx context.Context, cutoff interface{}) ([]Feed, error) {
+	rows, err := q.db.QueryContext(ctx, getFeedsToFetch, cutoff)
 	if err != nil {
 		return nil, err
 	}

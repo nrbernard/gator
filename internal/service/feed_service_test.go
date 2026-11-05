@@ -232,15 +232,17 @@ func TestFeedService_ScrapeFeeds_SuccessClearsError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			queries := setupTestDB(t)
+			db := setupTestSQLDB(t)
+			queries := database.New(db)
 			ctx := context.Background()
 			userID := createTestUser(t, queries)
 			server := tt.server(t)
 			feedID := createFollowedFeed(t, queries, userID, "Recovered", server.URL)
-			if err := queries.RecordFeedFetchError(ctx, database.RecordFeedFetchErrorParams{
-				LastFetchError: sql.NullString{String: "status code: 500", Valid: true},
-				ID:             feedID,
-			}); err != nil {
+			// Failed over an hour ago, so the Feed is due another attempt.
+			if _, err := db.Exec(
+				"UPDATE feeds SET last_fetch_error = 'status code: 500', last_fetch_error_at = datetime('now', '-2 hours') WHERE id = ?",
+				feedID,
+			); err != nil {
 				t.Fatalf("Failed to record fetch error: %v", err)
 			}
 
@@ -260,25 +262,56 @@ func TestFeedService_ScrapeFeeds_SuccessClearsError(t *testing.T) {
 	}
 }
 
-func TestFeedService_ScrapeFeeds_RateLimitedFeedIsSkippedWithoutError(t *testing.T) {
-	queries := setupTestDB(t)
-	ctx := context.Background()
-	userID := createTestUser(t, queries)
-	server := serveStatus(t, http.StatusTooManyRequests)
-	createFollowedFeed(t, queries, userID, "Rate limited", server.URL)
+// serveCountingStatus answers every request with status and counts them.
+func serveCountingStatus(t *testing.T, status int) (*httptest.Server, *int) {
+	t.Helper()
+	hits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.WriteHeader(status)
+	}))
+	t.Cleanup(server.Close)
+	return server, &hits
+}
 
-	svc := &FeedService{Repo: queries}
-	if err := svc.ScrapeFeeds(ctx); err != nil {
-		t.Fatalf("ScrapeFeeds returned error: %v", err)
+func TestFeedService_ScrapeFeeds_FailedFeedWaitsOutTheHour(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		wantError string
+	}{
+		{"fetch error", http.StatusInternalServerError, "500"},
+		{"rate limited", http.StatusTooManyRequests, "rate limited"},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queries := setupTestDB(t)
+			ctx := context.Background()
+			userID := createTestUser(t, queries)
+			server, hits := serveCountingStatus(t, tt.status)
+			createFollowedFeed(t, queries, userID, "Failing", server.URL)
 
-	feed, err := queries.GetFeedByUrl(ctx, server.URL)
-	if err != nil {
-		t.Fatalf("Failed to get feed: %v", err)
-	}
-	if feed.LastFetchError.Valid || feed.LastFetchErrorAt.Valid || feed.LastFetchedAt.Valid {
-		t.Errorf("Expected a 429 to leave the Feed untouched, got error %+v at %+v, fetched %+v",
-			feed.LastFetchError, feed.LastFetchErrorAt, feed.LastFetchedAt)
+			svc := &FeedService{Repo: queries}
+			for range 2 {
+				if err := svc.ScrapeFeeds(ctx); err != nil {
+					t.Fatalf("ScrapeFeeds returned error: %v", err)
+				}
+			}
+
+			if *hits != 1 {
+				t.Errorf("Expected a failed Feed to be fetched once within the hour, got %d requests", *hits)
+			}
+			feed, err := queries.GetFeedByUrl(ctx, server.URL)
+			if err != nil {
+				t.Fatalf("Failed to get feed: %v", err)
+			}
+			if !feed.LastFetchError.Valid || !strings.Contains(feed.LastFetchError.String, tt.wantError) || !feed.LastFetchErrorAt.Valid {
+				t.Errorf("Expected the error to mention %q, got %+v at %+v", tt.wantError, feed.LastFetchError, feed.LastFetchErrorAt)
+			}
+			if feed.LastFetchedAt.Valid {
+				t.Errorf("Expected a failed fetch not to count as fetched, got %+v", feed.LastFetchedAt)
+			}
+		})
 	}
 }
 

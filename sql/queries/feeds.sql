@@ -58,9 +58,12 @@ ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
 LIMIT 1;
 
 -- name: GetFeedsToFetch :many
+-- The Feeds due a fetch: neither fetched nor failed since the cutoff, so a
+-- failing Feed waits out the same hourly limit as one that fetched.
 SELECT * FROM feeds
 WHERE removed_at IS NULL
-AND (last_fetched_at IS NULL OR last_fetched_at < ?)
+AND (last_fetched_at IS NULL OR datetime(last_fetched_at) < datetime(@cutoff))
+AND (last_fetch_error_at IS NULL OR datetime(last_fetch_error_at) < datetime(@cutoff))
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC;
 
 -- name: UpdateFeedConditionalHeaders :exec
