@@ -11,6 +11,31 @@
 </header>
 {{ end }}
 
+{{/* The "N new" chip and check now. Posts fetched after the page's cutoff wait
+     behind the chip; tapping it moves the cutoff to when the chip counted
+     them, so it shows the Posts it counted. Check now runs the scrape and
+     responds with this block. The block always swaps out of band, by its id,
+     so every response that carries it (check now, or a new top of the Queue)
+     updates it in place. */}}
+{{ block "queue-new" . }}
+<div id="queue-new" hx-swap-oob="true" class="mb-4 flex items-center gap-4"
+  hx-vals='{"cutoff": "{{ .CutoffParam }}"}'>
+  {{ if .New }}
+    <button hx-get="/queue/card" hx-vals='{"cutoff": "{{ .NewCutoffParam }}"}' hx-target="#queue" hx-swap="outerHTML"
+      class="px-3 py-1 rounded-full bg-lime-300 text-lime-950 text-sm font-medium hover:bg-lime-400">{{ .New }} new</button>
+  {{ end }}
+  <button hx-post="/queue/check" hx-swap="none" hx-indicator="#check-indicator"
+    class="text-sm text-gray-600 hover:text-gray-900">Check now</button>
+  <span id="check-indicator" class="htmx-indicator text-gray-600 text-sm">Checking...</span>
+</div>
+{{ end }}
+
+{{/* A new top of the Queue, with the chip counted against its cutoff. */}}
+{{ block "queue-response" . }}
+{{ template "queue" . }}
+{{ template "queue-new" . }}
+{{ end }}
+
 {{/* The top of the Queue: one Post with Keep and Trash, or the empty Queue.
      Each triage action responds with this block for the next Post. The
      section's hx-vals send the page's cutoff with every request from inside

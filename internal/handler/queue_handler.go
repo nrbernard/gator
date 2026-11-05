@@ -56,7 +56,7 @@ func (h *QueueHandler) Card(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue", queue)
+	return c.Render(http.StatusOK, "queue-response", queue)
 }
 
 // ConfirmTrashAll asks before trashing the Queue, with the number of Posts
@@ -96,7 +96,7 @@ func (h *QueueHandler) TrashAll(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue", queue)
+	return c.Render(http.StatusOK, "queue-response", queue)
 }
 
 // requestCutoff is the cutoff the Queue page sent, if it sent a valid one.
@@ -107,12 +107,7 @@ func requestCutoff(c echo.Context) (time.Time, bool) {
 
 // queue is the top of the user's Queue, for a page whose cutoff is cutoff.
 func (h *QueueHandler) queue(ctx context.Context, userID uuid.UUID, cutoff time.Time) (models.Queue, error) {
-	queue, err := h.PostService.Queue(ctx, userID)
-	if err != nil {
-		return models.Queue{}, err
-	}
-	queue.Cutoff = cutoff
-	return queue, nil
+	return h.PostService.Queue(ctx, userID, cutoff)
 }
 
 // Refresh fetches the Feeds due a fetch and responds with the top of the Queue.
@@ -130,7 +125,7 @@ func (h *QueueHandler) Refresh(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue", queue)
+	return c.Render(http.StatusOK, "queue-response", queue)
 }
 
 // Keep moves the Post to the Reading list and responds with the next card.
@@ -172,7 +167,7 @@ func (h *QueueHandler) triage(c echo.Context, move func(context.Context, uuid.UU
 	if err != nil {
 		return err
 	}
-	return c.Render(http.StatusOK, "queue", queue)
+	return c.Render(http.StatusOK, "queue-response", queue)
 }
 
 // moveError maps a rejected move to its HTTP status.

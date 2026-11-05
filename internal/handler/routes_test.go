@@ -272,7 +272,7 @@ func TestQueue_TrashAllAsksFirstWithTheNumberOfPostsItWillTrash(t *testing.T) {
 	if got := pageCutoff(t, cancelled); got != cutoff {
 		t.Errorf("cancel moved the cutoff from %s to %s", cutoff, got)
 	}
-	assertContains(t, cancelled, `id="queue"`, "3 left")
+	assertContains(t, cancelled, `id="queue"`, "2 left", ">1 new<")
 }
 
 func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
@@ -290,8 +290,44 @@ func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
 	app.assertPlace(t, first, service.PlaceTrash)
 	app.assertPlace(t, second, service.PlaceTrash)
 	app.assertPlace(t, unseen, service.PlaceQueue)
-	assertContains(t, body, `id="queue"`, "Fetched after the page loaded", "1 left")
-	assertNotContains(t, body, "<html")
+	assertContains(t, body, `id="queue"`, "caught up", ">1 new<")
+	assertNotContains(t, body, "<html", "Fetched after the page loaded")
+}
+
+// fetchedAt sets when gator fetched the Post.
+func (a *testApp) fetchedAt(t *testing.T, postID uuid.UUID, at time.Time) {
+	t.Helper()
+	if _, err := a.db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", at.UTC().Format(time.DateTime), postID.String()); err != nil {
+		t.Fatalf("set created_at: %v", err)
+	}
+}
+
+func cutoffQuery(cutoff time.Time) string {
+	return "cutoff=" + url.QueryEscape(cutoff.UTC().Format(time.RFC3339Nano))
+}
+
+func TestQueue_PostsFetchedAfterThePageLoadedWaitBehindTheChip(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	pageLoad := now.Add(-time.Minute)
+	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
+	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
+	app.post(t, "New post", "", now)
+
+	body := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+
+	assertContains(t, body, "Shown post", "1 left", ">1 new<")
+	assertNotContains(t, body, "New post")
+}
+
+func TestQueue_WithNoNewPostsThereIsNoChip(t *testing.T) {
+	app := newTestApp(t)
+	app.post(t, "A post", "", time.Now())
+
+	body := app.request(t, http.MethodGet, "/", nil).Body.String()
+
+	assertContains(t, body, "A post", "1 left")
+	assertNotContains(t, body, " new<")
 }
 
 func TestQueue_TrashAllWithoutACutoffTrashesNothing(t *testing.T) {

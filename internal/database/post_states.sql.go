@@ -11,15 +11,22 @@ import (
 	"time"
 )
 
-const countQueuePosts = `-- name: CountQueuePosts :one
+const countQueuePostsCreatedAfter = `-- name: CountQueuePostsCreatedAfter :one
 SELECT COUNT(*)
 FROM posts
 WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) > datetime(?2)
 `
 
-func (q *Queries) CountQueuePosts(ctx context.Context, userID string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countQueuePosts, userID)
+type CountQueuePostsCreatedAfterParams struct {
+	UserID string
+	Cutoff interface{}
+}
+
+// The Queue Posts gator fetched after the cutoff: the new Posts the chip counts.
+func (q *Queries) CountQueuePostsCreatedAfter(ctx context.Context, arg CountQueuePostsCreatedAfterParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countQueuePostsCreatedAfter, arg.UserID, arg.Cutoff)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -70,9 +77,15 @@ FROM posts
 JOIN feeds ON feeds.id = posts.feed_id
 WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1)
+AND datetime(posts.created_at) <= datetime(?2)
 ORDER BY posts.published_at DESC
 LIMIT 1
 `
+
+type GetNextQueuePostParams struct {
+	UserID string
+	Cutoff interface{}
+}
 
 type GetNextQueuePostRow struct {
 	ID          string
@@ -84,9 +97,11 @@ type GetNextQueuePostRow struct {
 	FeedName    string
 }
 
-// The newest Post from a followed Feed that has no state: the top of the Queue.
-func (q *Queries) GetNextQueuePost(ctx context.Context, userID string) (GetNextQueuePostRow, error) {
-	row := q.db.QueryRowContext(ctx, getNextQueuePost, userID)
+// The newest Post from a followed Feed that has no state and that gator
+// fetched at or before the cutoff: the top of the Queue. Later Posts are new,
+// behind the chip. datetime() compares at whole seconds, as trash all does.
+func (q *Queries) GetNextQueuePost(ctx context.Context, arg GetNextQueuePostParams) (GetNextQueuePostRow, error) {
+	row := q.db.QueryRowContext(ctx, getNextQueuePost, arg.UserID, arg.Cutoff)
 	var i GetNextQueuePostRow
 	err := row.Scan(
 		&i.ID,
