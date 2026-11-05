@@ -320,6 +320,58 @@ func TestQueue_PostsFetchedAfterThePageLoadedWaitBehindTheChip(t *testing.T) {
 	assertNotContains(t, body, "New post")
 }
 
+var chipPattern = regexp.MustCompile(`hx-get="/queue/card" hx-vals='\{"cutoff":\s*"([^"]+)"\}'`)
+
+// chipCutoff is the cutoff tapping the chip moves the page to.
+func chipCutoff(t *testing.T, body string) string {
+	t.Helper()
+	m := chipPattern.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("response has no chip; body:\n%s", body)
+	}
+	return m[1]
+}
+
+func TestQueue_TappingTheChipMovesTheCutoffAndShowsTheNewPosts(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	pageLoad := now.Add(-time.Minute)
+	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
+	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
+	app.post(t, "New post", "", now)
+	card := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+
+	tapped := chipCutoff(t, card)
+	body := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(tapped), nil).Body.String()
+
+	if got := pageCutoff(t, body); got != tapped {
+		t.Errorf("cutoff = %s, want the chip's %s", got, tapped)
+	}
+	assertContains(t, body, "New post", "2 left")
+	assertNotContains(t, body, "Shown post", " new<")
+}
+
+func TestQueue_TrashAllAfterTappingTheChipTrashesWhatItRevealed(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	pageLoad := now.Add(-time.Minute)
+	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
+	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
+	revealed := app.post(t, "Revealed post", "", now)
+	card := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+	tapped := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(chipCutoff(t, card)), nil).Body.String()
+	since := app.post(t, "Fetched since the tap", "", now)
+	app.fetchedAfterPageLoad(t, since)
+
+	form := url.Values{"cutoff": {pageCutoff(t, tapped)}}.Encode()
+	body := app.request(t, http.MethodPost, "/queue/trash-all", strings.NewReader(form)).Body.String()
+
+	app.assertPlace(t, shown, service.PlaceTrash)
+	app.assertPlace(t, revealed, service.PlaceTrash)
+	app.assertPlace(t, since, service.PlaceQueue)
+	assertContains(t, body, "caught up", ">1 new<")
+}
+
 func TestQueue_WithNoNewPostsThereIsNoChip(t *testing.T) {
 	app := newTestApp(t)
 	app.post(t, "A post", "", time.Now())
