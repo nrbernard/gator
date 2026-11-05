@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -36,23 +35,6 @@ func (a *testApp) followedFeed(t *testing.T, name string) uuid.UUID {
 	return id
 }
 
-// postIn adds a Post to the Feed feedID.
-func (a *testApp) postIn(t *testing.T, feedID uuid.UUID, title string, publishedAt time.Time) uuid.UUID {
-	t.Helper()
-	id := uuid.New()
-	if _, err := a.queries.CreatePost(context.Background(), database.CreatePostParams{
-		ID:          id.String(),
-		Title:       title,
-		Url:         "http://example.com/posts/" + id.String(),
-		Description: sql.NullString{},
-		PublishedAt: publishedAt,
-		FeedID:      feedID.String(),
-	}); err != nil {
-		t.Fatalf("create post: %v", err)
-	}
-	return id
-}
-
 // removeFeed removes the fixture Feed, "Example Feed", through the Feeds screen.
 func (a *testApp) removeFeed(t *testing.T) {
 	t.Helper()
@@ -61,14 +43,12 @@ func (a *testApp) removeFeed(t *testing.T) {
 
 func TestFeeds_RemovingAFeedTakesItsPostsOutOfTheQueue(t *testing.T) {
 	app := newTestApp(t)
-	now := time.Now()
+	now := app.clock.Now()
 	pageLoad := now.Add(-time.Minute)
 	other := app.followedFeed(t, "Other Feed")
-	kept := app.postIn(t, other, "Other post", now.Add(-2*time.Hour))
-	app.fetchedAt(t, kept, pageLoad.Add(-time.Minute))
-	removed := app.post(t, "Removed Feed post", "", now.Add(-time.Hour))
-	app.fetchedAt(t, removed, pageLoad.Add(-time.Minute))
-	app.post(t, "Removed Feed new post", "", now)
+	kept := app.createPost(t, other, "Other post", "", now.Add(-2*time.Hour), pageLoad.Add(-time.Minute))
+	removed := app.postFetchedAt(t, "Removed Feed post", now.Add(-time.Hour), pageLoad.Add(-time.Minute))
+	app.postFetchedAt(t, "Removed Feed new post", now, now.Add(-30*time.Second))
 
 	app.removeFeed(t)
 

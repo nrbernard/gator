@@ -53,7 +53,7 @@ func main() {
 	userService := &service.UserService{Repo: dbQueries}
 	systemClock := clock.New()
 	postService := &service.PostService{Repo: dbQueries, Clock: systemClock}
-	feedService := &service.FeedService{Repo: dbQueries}
+	feedService := &service.FeedService{Repo: dbQueries, Clock: systemClock}
 	stateService := &service.PostStateService{Repo: dbQueries, Clock: systemClock}
 
 	e.Use(middleware.CurrentUser(userService))

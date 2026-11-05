@@ -44,12 +44,11 @@ type testApp struct {
 	feedID  uuid.UUID
 }
 
-// newTestApp's clock is stopped a minute after the system clock, which the
-// database uses to record when gator fetched a Post: Posts a test creates were
-// fetched before any Queue page it loads.
+// newTestApp's clock is stopped at the time the test starts; only Advance
+// moves it.
 func newTestApp(t *testing.T) *testApp {
 	t.Helper()
-	return newTestAppOn(t, clock.NewNull(time.Now().Add(time.Minute)))
+	return newTestAppOn(t, clock.NewNull(time.Now()))
 }
 
 // newTestAppOn is newTestApp with the app's clock c.
@@ -104,7 +103,7 @@ func newTestAppOn(t *testing.T, c *clock.Clock) *testApp {
 		}
 	})
 	posts := &service.PostService{Repo: queries, Clock: c}
-	feeds := &service.FeedService{Repo: queries}
+	feeds := &service.FeedService{Repo: queries, Clock: c}
 	Register(app.e, Handlers{
 		Queue:       &QueueHandler{PostService: posts, StateService: app.states, FeedService: feeds},
 		ReadingList: &ReadingListHandler{PostService: posts, StateService: app.states},
@@ -117,7 +116,20 @@ func newTestAppOn(t *testing.T, c *clock.Clock) *testApp {
 	return app
 }
 
+// post adds a Post to the fixture Feed that gator fetched a minute before the
+// app's clock, so before any Queue page the test loads.
 func (a *testApp) post(t *testing.T, title, description string, publishedAt time.Time) uuid.UUID {
+	t.Helper()
+	return a.createPost(t, a.feedID, title, description, publishedAt, a.clock.Now().Add(-time.Minute))
+}
+
+// postFetchedAt adds a Post to the fixture Feed that gator fetched at fetchedAt.
+func (a *testApp) postFetchedAt(t *testing.T, title string, publishedAt, fetchedAt time.Time) uuid.UUID {
+	t.Helper()
+	return a.createPost(t, a.feedID, title, "", publishedAt, fetchedAt)
+}
+
+func (a *testApp) createPost(t *testing.T, feedID uuid.UUID, title, description string, publishedAt, fetchedAt time.Time) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	if _, err := a.queries.CreatePost(context.Background(), database.CreatePostParams{
@@ -126,7 +138,8 @@ func (a *testApp) post(t *testing.T, title, description string, publishedAt time
 		Url:         "http://example.com/posts/" + id.String(),
 		Description: sql.NullString{String: description, Valid: description != ""},
 		PublishedAt: publishedAt,
-		FeedID:      a.feedID.String(),
+		FeedID:      feedID.String(),
+		CreatedAt:   fetchedAt.UTC().Truncate(time.Second),
 	}); err != nil {
 		t.Fatalf("create post: %v", err)
 	}
@@ -243,11 +256,12 @@ func TestQueue_OpeningTheCardGoesToTheSiteAndKeepsThePostMarkedRead(t *testing.T
 	assertNotContains(t, body, "Top post", "<html")
 }
 
-// fetchedAfterPageLoad makes the Post look fetched a minute after the app's
-// clock, after any Queue page loaded in the test.
-func (a *testApp) fetchedAfterPageLoad(t *testing.T, postID uuid.UUID) {
+// fetchLater moves the app's clock on a minute, past any Queue page loaded so
+// far, and adds a Post gator fetched then.
+func (a *testApp) fetchLater(t *testing.T, title string) uuid.UUID {
 	t.Helper()
-	a.fetchedAt(t, postID, a.clock.Now().Add(time.Minute))
+	a.clock.Advance(time.Minute)
+	return a.postFetchedAt(t, title, a.clock.Now(), a.clock.Now())
 }
 
 var cutoffPattern = regexp.MustCompile(`"cutoff":\s*"([^"]+)"`)
@@ -269,8 +283,7 @@ func TestQueue_TrashAllAsksFirstWithTheNumberOfPostsItWillTrash(t *testing.T) {
 	second := app.post(t, "Second post", "", now)
 	page := app.request(t, http.MethodGet, "/", nil).Body.String()
 	assertContains(t, page, `hx-get="/queue/trash-all"`)
-	unseen := app.post(t, "Fetched after the page loaded", "", now)
-	app.fetchedAfterPageLoad(t, unseen)
+	unseen := app.fetchLater(t, "Fetched after the page loaded")
 
 	cutoff := pageCutoff(t, page)
 	body := app.request(t, http.MethodGet, "/queue/trash-all?cutoff="+url.QueryEscape(cutoff), nil).Body.String()
@@ -295,8 +308,7 @@ func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
 	first := app.post(t, "First post", "", now.Add(-1*time.Hour))
 	second := app.post(t, "Second post", "", now)
 	page := app.request(t, http.MethodGet, "/", nil).Body.String()
-	unseen := app.post(t, "Fetched after the page loaded", "", now)
-	app.fetchedAfterPageLoad(t, unseen)
+	unseen := app.fetchLater(t, "Fetched after the page loaded")
 
 	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
 	body := app.request(t, http.MethodPost, "/queue/trash-all", strings.NewReader(form)).Body.String()
@@ -308,27 +320,17 @@ func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
 	assertNotContains(t, body, "<html", "Fetched after the page loaded")
 }
 
-// fetchedAt sets when gator fetched the Post.
-func (a *testApp) fetchedAt(t *testing.T, postID uuid.UUID, at time.Time) {
-	t.Helper()
-	if _, err := a.db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", at.UTC().Format(time.DateTime), postID.String()); err != nil {
-		t.Fatalf("set created_at: %v", err)
-	}
-}
-
 func cutoffQuery(cutoff time.Time) string {
 	return "cutoff=" + url.QueryEscape(cutoff.UTC().Format(time.RFC3339Nano))
 }
 
 func TestQueue_PostsFetchedAfterThePageLoadedWaitBehindTheChip(t *testing.T) {
 	app := newTestApp(t)
-	now := time.Now()
-	pageLoad := now.Add(-time.Minute)
-	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
-	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
-	app.post(t, "New post", "", now)
+	app.post(t, "Shown post", "", app.clock.Now().Add(-time.Hour))
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	app.fetchLater(t, "New post")
 
-	body := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+	body := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(pageCutoff(t, page)), nil).Body.String()
 
 	assertContains(t, body, "Shown post", "1 left", ">1 new<")
 	assertNotContains(t, body, "New post")
@@ -348,12 +350,10 @@ func chipCutoff(t *testing.T, body string) string {
 
 func TestQueue_TappingTheChipMovesTheCutoffAndShowsTheNewPosts(t *testing.T) {
 	app := newTestApp(t)
-	now := time.Now()
-	pageLoad := now.Add(-time.Minute)
-	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
-	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
-	app.post(t, "New post", "", now)
-	card := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+	app.post(t, "Shown post", "", app.clock.Now().Add(-time.Hour))
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	app.fetchLater(t, "New post")
+	card := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(pageCutoff(t, page)), nil).Body.String()
 
 	tapped := chipCutoff(t, card)
 	body := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(tapped), nil).Body.String()
@@ -367,15 +367,12 @@ func TestQueue_TappingTheChipMovesTheCutoffAndShowsTheNewPosts(t *testing.T) {
 
 func TestQueue_TrashAllAfterTappingTheChipTrashesWhatItRevealed(t *testing.T) {
 	app := newTestApp(t)
-	now := time.Now()
-	pageLoad := now.Add(-time.Minute)
-	shown := app.post(t, "Shown post", "", now.Add(-time.Hour))
-	app.fetchedAt(t, shown, pageLoad.Add(-time.Minute))
-	revealed := app.post(t, "Revealed post", "", now)
-	card := app.request(t, http.MethodGet, "/queue/card?"+cutoffQuery(pageLoad), nil).Body.String()
+	shown := app.post(t, "Shown post", "", app.clock.Now().Add(-time.Hour))
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	revealed := app.fetchLater(t, "Revealed post")
+	card := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(pageCutoff(t, page)), nil).Body.String()
 	tapped := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(chipCutoff(t, card)), nil).Body.String()
-	since := app.post(t, "Fetched since the tap", "", now)
-	app.fetchedAfterPageLoad(t, since)
+	since := app.fetchLater(t, "Fetched since the tap")
 
 	form := url.Values{"cutoff": {pageCutoff(t, tapped)}}.Encode()
 	body := app.request(t, http.MethodPost, "/queue/trash-all", strings.NewReader(form)).Body.String()

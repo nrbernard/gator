@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -43,11 +42,21 @@ func newFixture(t *testing.T, queries *database.Queries) fixture {
 	return fixture{queries: queries, userID: userID, feedID: feedID, clock: clock.NewNull(time.Now())}
 }
 
+// post adds a Post published at publishedAt that gator fetched at the
+// fixture clock's time.
 func (f fixture) post(t *testing.T, title string, publishedAt time.Time) uuid.UUID {
+	t.Helper()
+	return f.postFetchedAt(t, title, publishedAt, f.clock.Now())
+}
+
+// postFetchedAt adds a Post published at publishedAt that gator fetched at
+// fetchedAt.
+func (f fixture) postFetchedAt(t *testing.T, title string, publishedAt, fetchedAt time.Time) uuid.UUID {
 	t.Helper()
 	id := uuid.New()
 	if _, err := f.queries.CreatePost(context.Background(), database.CreatePostParams{
 		ID: id.String(), Title: title, Url: "http://example.com/posts/" + id.String(), PublishedAt: publishedAt, FeedID: f.feedID.String(),
+		CreatedAt: fetchedAt.UTC().Truncate(time.Second),
 	}); err != nil {
 		t.Fatalf("create post: %v", err)
 	}
@@ -399,29 +408,16 @@ func TestPostStateService_RejectsMovesOfAMissingPost(t *testing.T) {
 	}
 }
 
-// setCreatedAt backdates when gator fetched the Post, in the format SQLite's
-// CURRENT_TIMESTAMP writes.
-func setCreatedAt(t *testing.T, db *sql.DB, postID uuid.UUID, at time.Time) {
-	t.Helper()
-	if _, err := db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", at.UTC().Format(time.DateTime), postID.String()); err != nil {
-		t.Fatalf("set created_at: %v", err)
-	}
-}
-
 func TestPostStateService_TrashAllTrashesQueuePostsCreatedByTheCutoff(t *testing.T) {
-	db := setupTestSQLDB(t)
-	f := newFixture(t, database.New(db))
+	f := newFixture(t, setupTestDB(t))
 	s := f.stateService()
 	ctx := context.Background()
 	cutoff := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)
-	seen := f.post(t, "Seen", time.Now())
-	setCreatedAt(t, db, seen, cutoff.Add(-time.Hour))
-	atCutoff := f.post(t, "Fetched as the page loaded", time.Now())
-	setCreatedAt(t, db, atCutoff, cutoff)
-	unseen := f.post(t, "Fetched after the page loaded", time.Now())
-	setCreatedAt(t, db, unseen, cutoff.Add(time.Minute))
-	kept := f.post(t, "Kept", time.Now())
-	setCreatedAt(t, db, kept, cutoff.Add(-time.Hour))
+	now := time.Now()
+	seen := f.postFetchedAt(t, "Seen", now, cutoff.Add(-time.Hour))
+	atCutoff := f.postFetchedAt(t, "Fetched as the page loaded", now, cutoff)
+	unseen := f.postFetchedAt(t, "Fetched after the page loaded", now, cutoff.Add(time.Minute))
+	kept := f.postFetchedAt(t, "Kept", now, cutoff.Add(-time.Hour))
 	if err := s.Keep(ctx, f.userID, kept); err != nil {
 		t.Fatalf("Keep: %v", err)
 	}

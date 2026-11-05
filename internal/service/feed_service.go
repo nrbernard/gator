@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/nrbernard/gator/internal/feedparser"
 	"github.com/nrbernard/gator/internal/models"
@@ -16,6 +17,9 @@ import (
 
 type FeedService struct {
 	Repo *database.Queries
+	// Clock records when gator fetched each Post. The hourly fetch limit
+	// stays on the system clock, which the database's fetch times use.
+	Clock *clock.Clock
 }
 
 type CreateFeedParams struct {
@@ -205,6 +209,8 @@ func (s *FeedService) ScrapeFeeds(ctx context.Context) error {
 				Description: sql.NullString{String: *item.GetDescription(), Valid: item.GetDescription() != nil},
 				PublishedAt: item.GetDate(),
 				FeedID:      feed.ID,
+				// To the second, as the Queue's cutoffs compare it.
+				CreatedAt: s.Clock.Now().UTC().Truncate(time.Second),
 			})
 			if err != nil {
 				if !strings.Contains(err.Error(), "duplicate key value violates unique constraint") {

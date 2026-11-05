@@ -12,8 +12,8 @@ import (
 )
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (id, title, url, description, published_at, feed_id)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO posts (id, title, url, description, published_at, feed_id, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING id, created_at, updated_at, title, url, description, published_at, feed_id
 `
 
@@ -24,8 +24,10 @@ type CreatePostParams struct {
 	Description sql.NullString
 	PublishedAt time.Time
 	FeedID      string
+	CreatedAt   time.Time
 }
 
+// created_at is when gator fetched the Post, from its clock.
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
 	row := q.db.QueryRowContext(ctx, createPost,
 		arg.ID,
@@ -34,6 +36,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		arg.Description,
 		arg.PublishedAt,
 		arg.FeedID,
+		arg.CreatedAt,
 	)
 	var i Post
 	err := row.Scan(

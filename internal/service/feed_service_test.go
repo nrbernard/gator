@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/nrbernard/gator/internal/clock"
 	"github.com/nrbernard/gator/internal/database"
 	"github.com/pressly/goose/v3"
 	goosedb "github.com/pressly/goose/v3/database"
@@ -189,7 +190,7 @@ func TestFeedService_ScrapeFeeds_FailingFeedDoesNotStopOthers(t *testing.T) {
 	workingID := createFollowedFeed(t, queries, userID, "Working", working.URL)
 
 	before := time.Now().Add(-time.Second)
-	svc := &FeedService{Repo: queries}
+	svc := &FeedService{Repo: queries, Clock: clock.New()}
 	if err := svc.ScrapeFeeds(ctx); err != nil {
 		t.Fatalf("ScrapeFeeds returned error: %v", err)
 	}
@@ -246,7 +247,7 @@ func TestFeedService_ScrapeFeeds_SuccessClearsError(t *testing.T) {
 				t.Fatalf("Failed to record fetch error: %v", err)
 			}
 
-			svc := &FeedService{Repo: queries}
+			svc := &FeedService{Repo: queries, Clock: clock.New()}
 			if err := svc.ScrapeFeeds(ctx); err != nil {
 				t.Fatalf("ScrapeFeeds returned error: %v", err)
 			}
@@ -291,7 +292,7 @@ func TestFeedService_ScrapeFeeds_FailedFeedWaitsOutTheHour(t *testing.T) {
 			server, hits := serveCountingStatus(t, tt.status)
 			createFollowedFeed(t, queries, userID, "Failing", server.URL)
 
-			svc := &FeedService{Repo: queries}
+			svc := &FeedService{Repo: queries, Clock: clock.New()}
 			for range 2 {
 				if err := svc.ScrapeFeeds(ctx); err != nil {
 					t.Fatalf("ScrapeFeeds returned error: %v", err)
@@ -328,7 +329,7 @@ func TestFeedService_ScrapeFeeds_RemovedFeedIsSkipped(t *testing.T) {
 	t.Cleanup(server.Close)
 	feedID := createFollowedFeed(t, queries, userID, "Removed", server.URL)
 
-	svc := &FeedService{Repo: queries}
+	svc := &FeedService{Repo: queries, Clock: clock.New()}
 	if err := svc.RemoveFeed(ctx, uuid.MustParse(feedID)); err != nil {
 		t.Fatalf("RemoveFeed: %v", err)
 	}
@@ -353,7 +354,7 @@ func TestFeedService_ScrapeFeeds_NotModifiedCountsAsFetch(t *testing.T) {
 	t.Cleanup(server.Close)
 	createFollowedFeed(t, queries, userID, "Unchanged", server.URL)
 
-	svc := &FeedService{Repo: queries}
+	svc := &FeedService{Repo: queries, Clock: clock.New()}
 	for range 2 {
 		if err := svc.ScrapeFeeds(ctx); err != nil {
 			t.Fatalf("ScrapeFeeds returned error: %v", err)

@@ -1,6 +1,7 @@
 -- name: CreatePost :one
-INSERT INTO posts (id, title, url, description, published_at, feed_id)
-VALUES (?, ?, ?, ?, ?, ?)
+-- created_at is when gator fetched the Post, from its clock.
+INSERT INTO posts (id, title, url, description, published_at, feed_id, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetPostsByUser :many
