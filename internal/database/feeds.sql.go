@@ -326,7 +326,8 @@ func (q *Queries) RecordFeedFetchError(ctx context.Context, arg RecordFeedFetchE
 
 const updateFeedConditionalHeaders = `-- name: UpdateFeedConditionalHeaders :exec
 UPDATE feeds 
-SET etag = ?, last_modified = ?, last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+SET etag = ?, last_modified = ?, last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
+    last_fetch_error = NULL, last_fetch_error_at = NULL
 WHERE id = ?
 `
 
@@ -343,7 +344,8 @@ func (q *Queries) UpdateFeedConditionalHeaders(ctx context.Context, arg UpdateFe
 
 const updateFeedConditionalHeadersNoFetch = `-- name: UpdateFeedConditionalHeadersNoFetch :exec
 UPDATE feeds 
-SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP 
+SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP,
+    last_fetch_error = NULL, last_fetch_error_at = NULL
 WHERE id = ?
 `
 

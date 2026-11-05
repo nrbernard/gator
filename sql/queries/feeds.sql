@@ -52,7 +52,8 @@ ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC;
 
 -- name: UpdateFeedConditionalHeaders :exec
 UPDATE feeds 
-SET etag = ?, last_modified = ?, last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP 
+SET etag = ?, last_modified = ?, last_fetched_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
+    last_fetch_error = NULL, last_fetch_error_at = NULL
 WHERE id = ?;
 
 -- name: RecordFeedFetchError :exec
@@ -62,5 +63,6 @@ WHERE id = ?;
 
 -- name: UpdateFeedConditionalHeadersNoFetch :exec
 UPDATE feeds 
-SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP 
+SET etag = ?, last_modified = ?, updated_at = CURRENT_TIMESTAMP,
+    last_fetch_error = NULL, last_fetch_error_at = NULL
 WHERE id = ?;

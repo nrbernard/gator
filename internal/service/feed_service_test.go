@@ -215,6 +215,66 @@ func TestFeedService_ScrapeFeeds_FailingFeedDoesNotStopOthers(t *testing.T) {
 	}
 }
 
+func TestFeedService_ScrapeFeeds_SuccessClearsError(t *testing.T) {
+	tests := []struct {
+		name   string
+		server func(t *testing.T) *httptest.Server
+	}{
+		{"new content", serveRSS},
+		{"not modified", func(t *testing.T) *httptest.Server { return serveStatus(t, http.StatusNotModified) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			queries := setupTestDB(t)
+			ctx := context.Background()
+			userID := createTestUser(t, queries)
+			server := tt.server(t)
+			feedID := createFollowedFeed(t, queries, userID, "Recovered", server.URL)
+			if err := queries.RecordFeedFetchError(ctx, database.RecordFeedFetchErrorParams{
+				LastFetchError: sql.NullString{String: "status code: 500", Valid: true},
+				ID:             feedID,
+			}); err != nil {
+				t.Fatalf("Failed to record fetch error: %v", err)
+			}
+
+			svc := &FeedService{Repo: queries}
+			if err := svc.ScrapeFeeds(ctx); err != nil {
+				t.Fatalf("ScrapeFeeds returned error: %v", err)
+			}
+
+			feed, err := queries.GetFeedByUrl(ctx, server.URL)
+			if err != nil {
+				t.Fatalf("Failed to get feed: %v", err)
+			}
+			if feed.LastFetchError.Valid || feed.LastFetchErrorAt.Valid {
+				t.Errorf("Expected the error to be cleared, got %+v at %+v", feed.LastFetchError, feed.LastFetchErrorAt)
+			}
+		})
+	}
+}
+
+func TestFeedService_ScrapeFeeds_RateLimitedFeedIsSkippedWithoutError(t *testing.T) {
+	queries := setupTestDB(t)
+	ctx := context.Background()
+	userID := createTestUser(t, queries)
+	server := serveStatus(t, http.StatusTooManyRequests)
+	createFollowedFeed(t, queries, userID, "Rate limited", server.URL)
+
+	svc := &FeedService{Repo: queries}
+	if err := svc.ScrapeFeeds(ctx); err != nil {
+		t.Fatalf("ScrapeFeeds returned error: %v", err)
+	}
+
+	feed, err := queries.GetFeedByUrl(ctx, server.URL)
+	if err != nil {
+		t.Fatalf("Failed to get feed: %v", err)
+	}
+	if feed.LastFetchError.Valid || feed.LastFetchErrorAt.Valid || feed.LastFetchedAt.Valid {
+		t.Errorf("Expected a 429 to leave the Feed untouched, got error %+v at %+v, fetched %+v",
+			feed.LastFetchError, feed.LastFetchErrorAt, feed.LastFetchedAt)
+	}
+}
+
 func TestFeedService_ScrapeFeeds_PollingFrequency(t *testing.T) {
 	queries := setupTestDB(t)
 
