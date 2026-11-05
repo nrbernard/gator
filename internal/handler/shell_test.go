@@ -17,7 +17,7 @@ var pages = []string{"/", "/reading-list", "/archive", "/trash", "/search", "/fe
 
 var headerPattern = regexp.MustCompile(`(?s)<header\b.*?</header>`)
 
-func TestShell_HeaderLinksToTheQueueTheReadingListAndFeeds(t *testing.T) {
+func TestShell_HeaderLinksToEveryScreen(t *testing.T) {
 	for _, page := range pages {
 		t.Run(page, func(t *testing.T) {
 			app := newTestApp(t)
@@ -29,7 +29,7 @@ func TestShell_HeaderLinksToTheQueueTheReadingListAndFeeds(t *testing.T) {
 			if header == "" {
 				t.Fatalf("page has no <header>; body:\n%s", body)
 			}
-			assertContains(t, header, `href="/"`, `href="/reading-list"`, `href="/archive"`, `href="/trash"`, `href="/feeds"`)
+			assertContains(t, header, `href="/"`, `href="/reading-list"`, `href="/archive"`, `href="/trash"`, `href="/search"`, `href="/feeds"`)
 		})
 	}
 }
