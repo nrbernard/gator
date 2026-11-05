@@ -214,6 +214,10 @@
   .post-meta {
     @apply text-[13px] text-white/60;
   }
+  /* A search result's Place, ahead of its meta. */
+  .place-label {
+    @apply mr-1 inline-block rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] font-medium tracking-wide text-white/80 uppercase;
+  }
   .post-title {
     @apply mt-1 block rounded-sm font-semibold text-balance text-white decoration-white/30 decoration-2 underline-offset-4 hover:underline;
   }

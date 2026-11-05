@@ -23,6 +23,22 @@ const (
 	PlaceTrash       Place = "trash"
 )
 
+// Label is the Place's name as the user sees it.
+func (p Place) Label() string {
+	switch p {
+	case PlaceQueue:
+		return "Queue"
+	case PlaceReadingList:
+		return "Reading list"
+	case PlaceArchive:
+		return "Archive"
+	case PlaceTrash:
+		return "Trash"
+	default:
+		return string(p)
+	}
+}
+
 // PostState is a Post's Place for a user, where it came from if it is in the
 // Trash, and its Read mark.
 type PostState struct {

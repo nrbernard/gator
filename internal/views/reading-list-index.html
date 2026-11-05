@@ -5,9 +5,6 @@
     <div class="shell shell-wide">
       {{ template "header" "Reading list" }}
       <main class="pb-12 pt-2">
-        {{ template "posts-search" . }}
-        {{ template "search-results" . }}
-
         {{ template "reading-list" .Posts }}
       </main>
     </div>
