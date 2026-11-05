@@ -38,6 +38,9 @@
   <button hx-post="/reading-list/{{ .ID }}/read" hx-target="#reading-list" hx-swap="outerHTML" class="row-action">
     {{ if .IsRead }}{{ template "icon-circle" "size-3.5" }}<span>Mark unread</span>{{ else }}{{ template "icon-circle-check" "size-3.5" }}<span>Mark read</span>{{ end }}
   </button>
+  <button hx-post="/reading-list/{{ .ID }}/archive" hx-target="#reading-list" hx-swap="outerHTML" class="row-action">
+    {{ template "icon-archive" "size-3.5" }}<span>Archive</span>
+  </button>
   <button hx-post="/reading-list/{{ .ID }}/trash" hx-target="#reading-list" hx-swap="outerHTML" class="row-action row-action-danger">
     {{ template "icon-trash-2" "size-3.5" }}<span>Trash</span>
   </button>

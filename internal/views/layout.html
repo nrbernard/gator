@@ -28,8 +28,9 @@
     <script src="/static/js/app.js" defer></script>
 {{ end }}
 
-{{/* "header" takes the page title. A page that needs more beside its title (the Queue's
-     count) writes its own <header class="app-header"> around "header-nav". */}}
+{{/* "header" takes the page title. A page that needs more in its header (the Queue's
+     count and menu actions) writes its own <header class="app-header">, reusing
+     "menu-links" in its menu, as "queue-header" in queue.html does. */}}
 {{ define "header" }}
 <header class="app-header">
   <h1 class="app-title">{{ . }}</h1>

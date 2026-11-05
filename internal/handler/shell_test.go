@@ -10,7 +10,7 @@ import (
 )
 
 // pages are the app's full pages, which share the shell: header, assets, type.
-var pages = []string{"/", "/reading-list", "/feeds"}
+var pages = []string{"/", "/reading-list", "/archive", "/feeds"}
 
 var headerPattern = regexp.MustCompile(`(?s)<header\b.*?</header>`)
 
@@ -26,7 +26,7 @@ func TestShell_HeaderLinksToTheQueueTheReadingListAndFeeds(t *testing.T) {
 			if header == "" {
 				t.Fatalf("page has no <header>; body:\n%s", body)
 			}
-			assertContains(t, header, `href="/"`, `href="/reading-list"`, `href="/feeds"`)
+			assertContains(t, header, `href="/"`, `href="/reading-list"`, `href="/archive"`, `href="/feeds"`)
 		})
 	}
 }

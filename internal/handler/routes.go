@@ -10,6 +10,7 @@ import (
 type Handlers struct {
 	Queue       *QueueHandler
 	ReadingList *ReadingListHandler
+	Archive     *ArchiveHandler
 	Post        *PostHandler
 	Feed        *FeedHandler
 	// StaticDir is the directory served at /static: fonts, scripts, and the Tailwind build.
@@ -35,7 +36,12 @@ func Register(e *echo.Echo, h Handlers) {
 	e.GET("/reading-list", h.ReadingList.Index)
 	e.POST("/reading-list/:id/open", h.ReadingList.Open)
 	e.POST("/reading-list/:id/read", h.ReadingList.ToggleRead)
+	e.POST("/reading-list/:id/archive", h.ReadingList.Archive)
 	e.POST("/reading-list/:id/trash", h.ReadingList.Trash)
+
+	e.GET("/archive", h.Archive.Index)
+	e.POST("/archive/:id/unarchive", h.Archive.Unarchive)
+	e.POST("/archive/:id/trash", h.Archive.Trash)
 
 	e.POST("/search", h.Post.Search)
 

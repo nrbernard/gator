@@ -38,6 +38,11 @@ func (h *ReadingListHandler) ToggleRead(c echo.Context) error {
 	return h.act(c, h.StateService.ToggleRead)
 }
 
+// Archive moves the Post to the Archive.
+func (h *ReadingListHandler) Archive(c echo.Context) error {
+	return h.act(c, h.StateService.Archive)
+}
+
 // Trash moves the Post to the Trash, from the Reading list.
 func (h *ReadingListHandler) Trash(c echo.Context) error {
 	return h.act(c, func(ctx context.Context, userID, postID uuid.UUID) error {

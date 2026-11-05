@@ -65,6 +65,7 @@ func main() {
 	handler.Register(e, handler.Handlers{
 		Queue:       &handler.QueueHandler{PostService: postService, StateService: stateService, FeedService: feedService},
 		ReadingList: &handler.ReadingListHandler{PostService: postService, StateService: stateService},
+		Archive:     &handler.ArchiveHandler{PostService: postService, StateService: stateService},
 		Post:        &handler.PostHandler{PostService: postService},
 		Feed:        feedHandler,
 		StaticDir:   "static",
