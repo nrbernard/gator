@@ -12,11 +12,17 @@
 {{ end }}
 
 {{/* The top of the Queue: one Post with Keep and Trash, or the empty Queue.
-     Each triage action responds with this block for the next Post. */}}
+     Each triage action responds with this block for the next Post. The
+     section's hx-vals send the page's cutoff with every request from inside
+     it, and each response renders it again. */}}
 {{ block "queue" . }}
-<section id="queue" class="mb-8">
+<section id="queue" class="mb-8" hx-vals='{"cutoff": "{{ .CutoffParam }}"}'>
   {{ with .Next }}
-    <p class="text-sm text-gray-600 mb-2">{{ $.Count }} left</p>
+    <div class="flex justify-between items-baseline mb-2">
+      <p class="text-sm text-gray-600">{{ $.Count }} left</p>
+      <button hx-get="/queue/trash-all" hx-target="#queue" hx-swap="outerHTML"
+        class="text-sm text-gray-600 hover:text-gray-900">Trash all</button>
+    </div>
     <article class="bg-white rounded border border-neutral-200 p-4 mb-4">
       <div class="flex justify-between text-sm text-gray-600 mb-2">
         <span>{{ .FeedName }}</span>
@@ -41,6 +47,26 @@
     </div>
   {{ else }}
     <p class="text-gray-600 py-8">The Queue is empty. <a href="/reading-list" class="text-blue-600 hover:text-blue-800">Go to the Reading list</a></p>
+  {{ end }}
+</section>
+{{ end }}
+
+{{/* Trash all's confirmation, in place of the card. It counts only the Posts
+     fetched by the page's cutoff, which is all trash all trashes. */}}
+{{ block "queue-trash-all" . }}
+<section id="queue" class="mb-8" hx-vals='{"cutoff": "{{ .CutoffParam }}"}'>
+  {{ if .Count }}
+    <p class="text-gray-900 mb-4">Trash {{ .Count }} {{ if eq .Count 1 }}post{{ else }}posts{{ end }} from the Queue? Posts fetched since this page loaded stay.</p>
+    <div class="flex gap-4">
+      <button hx-get="/queue/card" hx-target="#queue" hx-swap="outerHTML"
+        class="flex-1 px-4 py-2 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Cancel</button>
+      <button hx-post="/queue/trash-all" hx-target="#queue" hx-swap="outerHTML"
+        class="flex-1 px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">Trash {{ .Count }} {{ if eq .Count 1 }}post{{ else }}posts{{ end }}</button>
+    </div>
+  {{ else }}
+    <p class="text-gray-600 mb-4">Nothing to trash.</p>
+    <button hx-get="/queue/card" hx-target="#queue" hx-swap="outerHTML"
+      class="px-4 py-2 rounded bg-gray-200 text-gray-900 hover:bg-gray-300">Back to the Queue</button>
   {{ end }}
 </section>
 {{ end }}

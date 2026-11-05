@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/nrbernard/gator/internal/models"
 	"github.com/nrbernard/gator/internal/service"
 )
 
@@ -26,16 +28,91 @@ func currentUserID(c echo.Context) (uuid.UUID, error) {
 	return userID, nil
 }
 
+// Index renders the Queue page, which records the moment it loaded as its
+// cutoff.
 func (h *QueueHandler) Index(c echo.Context) error {
 	userID, err := currentUserID(c)
 	if err != nil {
 		return err
 	}
-	queue, err := h.PostService.Queue(c.Request().Context(), userID)
+	queue, err := h.queue(c.Request().Context(), userID, time.Now())
 	if err != nil {
 		return err
 	}
 	return c.Render(http.StatusOK, "queue-index.html", map[string]any{"Queue": queue})
+}
+
+// Card responds with the top of the Queue, keeping the page's cutoff.
+func (h *QueueHandler) Card(c echo.Context) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	cutoff, ok := requestCutoff(c)
+	if !ok {
+		cutoff = time.Now()
+	}
+	queue, err := h.queue(c.Request().Context(), userID, cutoff)
+	if err != nil {
+		return err
+	}
+	return c.Render(http.StatusOK, "queue", queue)
+}
+
+// ConfirmTrashAll asks before trashing the Queue, with the number of Posts
+// trash all would trash. It moves nothing.
+func (h *QueueHandler) ConfirmTrashAll(c echo.Context) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	cutoff, ok := requestCutoff(c)
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
+	}
+	count, err := h.PostService.CountQueueCreatedBy(c.Request().Context(), userID, cutoff)
+	if err != nil {
+		return err
+	}
+	return c.Render(http.StatusOK, "queue-trash-all", models.Queue{Count: count, Cutoff: cutoff})
+}
+
+// TrashAll trashes the Queue Posts fetched by the page's cutoff, sparing any
+// fetched since, and responds with the top of what's left.
+func (h *QueueHandler) TrashAll(c echo.Context) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+	cutoff, ok := requestCutoff(c)
+	if !ok {
+		return echo.NewHTTPError(http.StatusBadRequest, "missing or invalid cutoff")
+	}
+	ctx := c.Request().Context()
+	if _, err := h.StateService.TrashAll(ctx, userID, cutoff); err != nil {
+		return err
+	}
+	queue, err := h.queue(ctx, userID, cutoff)
+	if err != nil {
+		return err
+	}
+	return c.Render(http.StatusOK, "queue", queue)
+}
+
+// requestCutoff is the cutoff the Queue page sent, if it sent a valid one.
+func requestCutoff(c echo.Context) (time.Time, bool) {
+	cutoff, err := time.Parse(time.RFC3339Nano, c.FormValue("cutoff"))
+	return cutoff, err == nil
+}
+
+// queue is the top of the user's Queue, for a page whose cutoff is cutoff.
+func (h *QueueHandler) queue(ctx context.Context, userID uuid.UUID, cutoff time.Time) (models.Queue, error) {
+	queue, err := h.PostService.Queue(ctx, userID)
+	if err != nil {
+		return models.Queue{}, err
+	}
+	queue.Cutoff = cutoff
+	return queue, nil
 }
 
 // Refresh fetches the Feeds due a fetch and responds with the top of the Queue.
@@ -48,7 +125,8 @@ func (h *QueueHandler) Refresh(c echo.Context) error {
 	if err := h.FeedService.ScrapeFeeds(ctx); err != nil {
 		return fmt.Errorf("failed to scrape feeds: %w", err)
 	}
-	queue, err := h.PostService.Queue(ctx, userID)
+	// Refreshing shows what it fetched, so it moves the cutoff to now.
+	queue, err := h.queue(ctx, userID, time.Now())
 	if err != nil {
 		return err
 	}
@@ -86,7 +164,11 @@ func (h *QueueHandler) triage(c echo.Context, move func(context.Context, uuid.UU
 	if err := move(ctx, userID, postID); err != nil {
 		return moveError(err)
 	}
-	queue, err := h.PostService.Queue(ctx, userID)
+	cutoff, ok := requestCutoff(c)
+	if !ok {
+		cutoff = time.Now()
+	}
+	queue, err := h.queue(ctx, userID, cutoff)
 	if err != nil {
 		return err
 	}

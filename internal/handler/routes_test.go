@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +33,7 @@ func (r *templateRenderer) Render(w io.Writer, name string, data interface{}, c 
 // user following one Feed.
 type testApp struct {
 	e       *echo.Echo
+	db      *sql.DB
 	queries *database.Queries
 	states  *service.PostStateService
 	userID  uuid.UUID
@@ -73,6 +76,7 @@ func newTestApp(t *testing.T) *testApp {
 
 	app := &testApp{
 		e:       echo.New(),
+		db:      db,
 		queries: queries,
 		states:  &service.PostStateService{Repo: queries},
 		userID:  userID,
@@ -220,6 +224,87 @@ func TestQueue_OpeningTheCardGoesToTheSiteAndKeepsThePostMarkedRead(t *testing.T
 	app.assertPlace(t, next, service.PlaceQueue)
 	assertContains(t, body, `id="queue"`, "Next post", "1 left")
 	assertNotContains(t, body, "Top post", "<html")
+}
+
+// fetchedAfterPageLoad makes the Post look fetched a minute from now, after any
+// Queue page loaded in the test.
+func (a *testApp) fetchedAfterPageLoad(t *testing.T, postID uuid.UUID) {
+	t.Helper()
+	later := time.Now().Add(time.Minute).UTC().Format(time.DateTime)
+	if _, err := a.db.Exec("UPDATE posts SET created_at = ? WHERE id = ?", later, postID.String()); err != nil {
+		t.Fatalf("set created_at: %v", err)
+	}
+}
+
+var cutoffPattern = regexp.MustCompile(`"cutoff":\s*"([^"]+)"`)
+
+// pageCutoff is the cutoff the Queue page recorded, which its requests send.
+func pageCutoff(t *testing.T, body string) string {
+	t.Helper()
+	m := cutoffPattern.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("page records no cutoff; body:\n%s", body)
+	}
+	return m[1]
+}
+
+func TestQueue_TrashAllAsksFirstWithTheNumberOfPostsItWillTrash(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	first := app.post(t, "First post", "", now.Add(-1*time.Hour))
+	second := app.post(t, "Second post", "", now)
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	assertContains(t, page, `hx-get="/queue/trash-all"`)
+	unseen := app.post(t, "Fetched after the page loaded", "", now)
+	app.fetchedAfterPageLoad(t, unseen)
+
+	cutoff := pageCutoff(t, page)
+	body := app.request(t, http.MethodGet, "/queue/trash-all?cutoff="+url.QueryEscape(cutoff), nil).Body.String()
+
+	assertContains(t, body, `id="queue"`, "Trash 2 posts", `hx-post="/queue/trash-all"`, `hx-get="/queue/card"`)
+	assertNotContains(t, body, "<html")
+	for _, id := range []uuid.UUID{first, second, unseen} {
+		app.assertPlace(t, id, service.PlaceQueue)
+	}
+
+	cancelled := app.request(t, http.MethodGet, "/queue/card?cutoff="+url.QueryEscape(cutoff), nil).Body.String()
+
+	if got := pageCutoff(t, cancelled); got != cutoff {
+		t.Errorf("cancel moved the cutoff from %s to %s", cutoff, got)
+	}
+	assertContains(t, cancelled, `id="queue"`, "3 left")
+}
+
+func TestQueue_TrashAllTrashesThePostsFetchedByThePageLoad(t *testing.T) {
+	app := newTestApp(t)
+	now := time.Now()
+	first := app.post(t, "First post", "", now.Add(-1*time.Hour))
+	second := app.post(t, "Second post", "", now)
+	page := app.request(t, http.MethodGet, "/", nil).Body.String()
+	unseen := app.post(t, "Fetched after the page loaded", "", now)
+	app.fetchedAfterPageLoad(t, unseen)
+
+	form := url.Values{"cutoff": {pageCutoff(t, page)}}.Encode()
+	body := app.request(t, http.MethodPost, "/queue/trash-all", strings.NewReader(form)).Body.String()
+
+	app.assertPlace(t, first, service.PlaceTrash)
+	app.assertPlace(t, second, service.PlaceTrash)
+	app.assertPlace(t, unseen, service.PlaceQueue)
+	assertContains(t, body, `id="queue"`, "Fetched after the page loaded", "1 left")
+	assertNotContains(t, body, "<html")
+}
+
+func TestQueue_TrashAllWithoutACutoffTrashesNothing(t *testing.T) {
+	app := newTestApp(t)
+	post := app.post(t, "A post", "", time.Now())
+
+	rec := httptest.NewRecorder()
+	app.e.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/queue/trash-all", nil))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	app.assertPlace(t, post, service.PlaceQueue)
 }
 
 func TestQueue_TriagingTheLastPostRespondsWithAnEmptyQueue(t *testing.T) {

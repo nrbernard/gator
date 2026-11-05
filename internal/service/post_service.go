@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nrbernard/gator/internal/database"
@@ -40,6 +41,19 @@ func (s *PostService) Queue(ctx context.Context, userID uuid.UUID) (models.Queue
 		FeedName:    row.FeedName,
 	}
 	return queue, nil
+}
+
+// CountQueueCreatedBy returns how many Queue Posts gator fetched at or before
+// cutoff: the Posts PostStateService.TrashAll would trash.
+func (s *PostService) CountQueueCreatedBy(ctx context.Context, userID uuid.UUID, cutoff time.Time) (int, error) {
+	n, err := s.Repo.CountQueuePostsCreatedBy(ctx, database.CountQueuePostsCreatedByParams{
+		UserID: userID.String(),
+		Cutoff: cutoff.UTC(),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("count queue: %w", err)
+	}
+	return int(n), nil
 }
 
 // ReadingList returns the user's kept Posts, most recently kept first.
