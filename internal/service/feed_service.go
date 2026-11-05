@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -31,20 +32,43 @@ func (s *FeedService) ListFeeds(ctx context.Context, userID uuid.UUID) ([]models
 	var feeds []models.Feed
 	for _, dbFeed := range dbFeeds {
 		feeds = append(feeds, models.Feed{
-			ID:          uuid.MustParse(dbFeed.ID),
-			Name:        dbFeed.Name,
-			Description: &dbFeed.Description.String,
-			Url:         dbFeed.Url,
+			ID:               uuid.MustParse(dbFeed.ID),
+			Name:             dbFeed.Name,
+			Description:      &dbFeed.Description.String,
+			Url:              dbFeed.Url,
+			LastFetchedAt:    timePtr(dbFeed.LastFetchedAt),
+			LastFetchError:   dbFeed.LastFetchError.String,
+			LastFetchErrorAt: timePtr(dbFeed.LastFetchErrorAt),
 		})
 	}
 	return feeds, nil
 }
 
+func timePtr(t sql.NullTime) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	return &t.Time
+}
+
 func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (models.Feed, error) {
 	feedUrl := params.Url
-	_, err := s.Repo.GetFeedByUrl(ctx, feedUrl)
+	existing, err := s.Repo.GetFeedByUrl(ctx, feedUrl)
 	if err == nil {
-		return models.Feed{}, fmt.Errorf("a feed with URL %s already exists", feedUrl)
+		if !existing.RemovedAt.Valid {
+			return models.Feed{}, fmt.Errorf("a feed with URL %s already exists", feedUrl)
+		}
+		// Feed URLs are unique, so re-adding a removed Feed un-removes it.
+		dbFeed, err := s.Repo.UnremoveFeed(ctx, existing.ID)
+		if err != nil {
+			return models.Feed{}, fmt.Errorf("unremove feed: %w", err)
+		}
+		return models.Feed{
+			ID:          uuid.MustParse(dbFeed.ID),
+			Name:        dbFeed.Name,
+			Description: &dbFeed.Description.String,
+			Url:         dbFeed.Url,
+		}, nil
 	}
 
 	feedData, err := feedparser.FetchFeed(context.Background(), feedUrl)
@@ -81,11 +105,21 @@ func (s *FeedService) CreateFeed(ctx context.Context, params CreateFeedParams) (
 	return feed, nil
 }
 
-func (s *FeedService) DeleteFeed(ctx context.Context, id uuid.UUID) error {
-	if err := s.Repo.DeleteFeed(ctx, id.String()); err != nil {
-		return err
-	}
+// ErrFeedNotFound is returned when removing a Feed that doesn't exist or is
+// already removed.
+var ErrFeedNotFound = errors.New("feed not found")
 
+// RemoveFeed stops following the Feed: it is no longer fetched or listed and
+// its Queue Posts leave the Queue, but its row stays, so its Reading list,
+// Archive, and Trash Posts keep their Feed.
+func (s *FeedService) RemoveFeed(ctx context.Context, id uuid.UUID) error {
+	n, err := s.Repo.RemoveFeed(ctx, id.String())
+	if err != nil {
+		return fmt.Errorf("remove feed: %w", err)
+	}
+	if n == 0 {
+		return ErrFeedNotFound
+	}
 	return nil
 }
 

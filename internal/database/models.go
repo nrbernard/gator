@@ -22,6 +22,7 @@ type Feed struct {
 	LastModified     sql.NullString
 	LastFetchError   sql.NullString
 	LastFetchErrorAt sql.NullTime
+	RemovedAt        sql.NullTime
 }
 
 type FeedFollow struct {

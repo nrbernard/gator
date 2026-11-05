@@ -20,7 +20,7 @@ VALUES (
     ?,
     ? 
 )
-RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at
+RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at, removed_at
 `
 
 type CreateFeedParams struct {
@@ -53,6 +53,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.LastModified,
 		&i.LastFetchError,
 		&i.LastFetchErrorAt,
+		&i.RemovedAt,
 	)
 	return i, err
 }
@@ -90,15 +91,6 @@ func (q *Queries) CreateFeedFollow(ctx context.Context, arg CreateFeedFollowPara
 	return i, err
 }
 
-const deleteFeed = `-- name: DeleteFeed :exec
-DELETE FROM feeds WHERE id = ?
-`
-
-func (q *Queries) DeleteFeed(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, deleteFeed, id)
-	return err
-}
-
 const deleteFeedFollow = `-- name: DeleteFeedFollow :exec
 DELETE FROM feed_follows WHERE feed_follows.user_id = ? AND feed_follows.feed_id = (SELECT id FROM feeds WHERE url = ?)
 `
@@ -114,7 +106,7 @@ func (q *Queries) DeleteFeedFollow(ctx context.Context, arg DeleteFeedFollowPara
 }
 
 const getFeedByUrl = `-- name: GetFeedByUrl :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at FROM feeds WHERE url = ?
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at, removed_at FROM feeds WHERE url = ?
 `
 
 func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
@@ -133,6 +125,7 @@ func (q *Queries) GetFeedByUrl(ctx context.Context, url string) (Feed, error) {
 		&i.LastModified,
 		&i.LastFetchError,
 		&i.LastFetchErrorAt,
+		&i.RemovedAt,
 	)
 	return i, err
 }
@@ -187,20 +180,25 @@ func (q *Queries) GetFeedFollowsForUser(ctx context.Context, userID string) ([]G
 }
 
 const getFeeds = `-- name: GetFeeds :many
-SELECT f.id, f.name, f.url, f.description, u.name as user_name 
+SELECT f.id, f.name, f.url, f.description, f.last_fetched_at, f.last_fetch_error, f.last_fetch_error_at, u.name as user_name
 FROM feeds f
 JOIN users u ON f.user_id = u.id
+WHERE f.removed_at IS NULL
 ORDER BY f.created_at DESC
 `
 
 type GetFeedsRow struct {
-	ID          string
-	Name        string
-	Url         string
-	Description sql.NullString
-	UserName    string
+	ID               string
+	Name             string
+	Url              string
+	Description      sql.NullString
+	LastFetchedAt    sql.NullTime
+	LastFetchError   sql.NullString
+	LastFetchErrorAt sql.NullTime
+	UserName         string
 }
 
+// The Feeds the user hasn't removed, with how their last fetches went.
 func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getFeeds)
 	if err != nil {
@@ -215,6 +213,9 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 			&i.Name,
 			&i.Url,
 			&i.Description,
+			&i.LastFetchedAt,
+			&i.LastFetchError,
+			&i.LastFetchErrorAt,
 			&i.UserName,
 		); err != nil {
 			return nil, err
@@ -231,9 +232,9 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]GetFeedsRow, error) {
 }
 
 const getFeedsToFetch = `-- name: GetFeedsToFetch :many
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at FROM feeds
-WHERE last_fetched_at IS NULL
-   OR last_fetched_at < ?
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at, removed_at FROM feeds
+WHERE removed_at IS NULL
+AND (last_fetched_at IS NULL OR last_fetched_at < ?)
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
 `
 
@@ -259,6 +260,7 @@ func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTim
 			&i.LastModified,
 			&i.LastFetchError,
 			&i.LastFetchErrorAt,
+			&i.RemovedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -274,7 +276,7 @@ func (q *Queries) GetFeedsToFetch(ctx context.Context, lastFetchedAt sql.NullTim
 }
 
 const getNextFeedToFetch = `-- name: GetNextFeedToFetch :one
-SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at FROM feeds
+SELECT id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at, removed_at FROM feeds
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC
 LIMIT 1
 `
@@ -295,6 +297,7 @@ func (q *Queries) GetNextFeedToFetch(ctx context.Context) (Feed, error) {
 		&i.LastModified,
 		&i.LastFetchError,
 		&i.LastFetchErrorAt,
+		&i.RemovedAt,
 	)
 	return i, err
 }
@@ -322,6 +325,51 @@ type RecordFeedFetchErrorParams struct {
 func (q *Queries) RecordFeedFetchError(ctx context.Context, arg RecordFeedFetchErrorParams) error {
 	_, err := q.db.ExecContext(ctx, recordFeedFetchError, arg.LastFetchError, arg.ID)
 	return err
+}
+
+const removeFeed = `-- name: RemoveFeed :execrows
+UPDATE feeds SET removed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND removed_at IS NULL
+`
+
+// Keeps the row, so the Feed's kept, archived, and trashed Posts stay.
+func (q *Queries) RemoveFeed(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, removeFeed, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const unremoveFeed = `-- name: UnremoveFeed :one
+UPDATE feeds
+SET removed_at = NULL, last_fetched_at = NULL, etag = NULL, last_modified = NULL,
+    last_fetch_error = NULL, last_fetch_error_at = NULL, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND removed_at IS NOT NULL
+RETURNING id, created_at, updated_at, name, url, user_id, last_fetched_at, description, etag, last_modified, last_fetch_error, last_fetch_error_at, removed_at
+`
+
+// Re-adding a removed Feed's URL. Clearing the fetch state makes the next fetch
+// request the whole Feed, so its current items enter the Queue as a new Feed's do.
+func (q *Queries) UnremoveFeed(ctx context.Context, id string) (Feed, error) {
+	row := q.db.QueryRowContext(ctx, unremoveFeed, id)
+	var i Feed
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+		&i.Url,
+		&i.UserID,
+		&i.LastFetchedAt,
+		&i.Description,
+		&i.Etag,
+		&i.LastModified,
+		&i.LastFetchError,
+		&i.LastFetchErrorAt,
+		&i.RemovedAt,
+	)
+	return i, err
 }
 
 const updateFeedConditionalHeaders = `-- name: UpdateFeedConditionalHeaders :exec

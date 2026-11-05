@@ -282,6 +282,32 @@ func TestFeedService_ScrapeFeeds_RateLimitedFeedIsSkippedWithoutError(t *testing
 	}
 }
 
+func TestFeedService_ScrapeFeeds_RemovedFeedIsSkipped(t *testing.T) {
+	queries := setupTestDB(t)
+	ctx := context.Background()
+	userID := createTestUser(t, queries)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/rss+xml")
+		_, _ = w.Write([]byte(testRSS))
+	}))
+	t.Cleanup(server.Close)
+	feedID := createFollowedFeed(t, queries, userID, "Removed", server.URL)
+
+	svc := &FeedService{Repo: queries}
+	if err := svc.RemoveFeed(ctx, uuid.MustParse(feedID)); err != nil {
+		t.Fatalf("RemoveFeed: %v", err)
+	}
+	if err := svc.ScrapeFeeds(ctx); err != nil {
+		t.Fatalf("ScrapeFeeds returned error: %v", err)
+	}
+
+	if requests != 0 {
+		t.Errorf("Expected the removed Feed not to be fetched, got %d requests", requests)
+	}
+}
+
 func TestFeedService_ScrapeFeeds_PollingFrequency(t *testing.T) {
 	queries := setupTestDB(t)
 

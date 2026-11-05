@@ -94,6 +94,8 @@ const searchPostsByUser = `-- name: SearchPostsByUser :many
 SELECT posts.id as id, title, posts.url as url, posts.description as description, published_at, feeds.name as feed_name, feeds.id as feed_id FROM posts
 JOIN feeds ON posts.feed_id = feeds.id
 WHERE feed_id IN (SELECT feed_id FROM feed_follows WHERE feed_follows.user_id = ?1)
+AND (feeds.removed_at IS NULL
+     OR EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = ?1))
 AND ( posts.title LIKE '%' || CAST(?2 AS TEXT) || '%'
       OR posts.description LIKE '%' || CAST(?2 AS TEXT) || '%'
     )
@@ -116,6 +118,7 @@ type SearchPostsByUserRow struct {
 	FeedID      string
 }
 
+// A removed Feed's Queue Posts are out of the Queue; its other Posts stay.
 func (q *Queries) SearchPostsByUser(ctx context.Context, arg SearchPostsByUserParams) ([]SearchPostsByUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPostsByUser, arg.UserID, arg.SearchText, arg.LimitCount)
 	if err != nil {

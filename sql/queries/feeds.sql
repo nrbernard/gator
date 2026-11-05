@@ -10,9 +10,11 @@ VALUES (
 RETURNING *;
 
 -- name: GetFeeds :many
-SELECT f.id, f.name, f.url, f.description, u.name as user_name 
+-- The Feeds the user hasn't removed, with how their last fetches went.
+SELECT f.id, f.name, f.url, f.description, f.last_fetched_at, f.last_fetch_error, f.last_fetch_error_at, u.name as user_name
 FROM feeds f
 JOIN users u ON f.user_id = u.id
+WHERE f.removed_at IS NULL
 ORDER BY f.created_at DESC;
 
 -- name: GetFeedByUrl :one
@@ -30,8 +32,19 @@ JOIN feeds f ON feed_follows.feed_id = f.id
 JOIN users u ON feed_follows.user_id = u.id
 WHERE feed_follows.user_id = ?;
 
--- name: DeleteFeed :exec
-DELETE FROM feeds WHERE id = ?;
+-- name: RemoveFeed :execrows
+-- Keeps the row, so the Feed's kept, archived, and trashed Posts stay.
+UPDATE feeds SET removed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND removed_at IS NULL;
+
+-- name: UnremoveFeed :one
+-- Re-adding a removed Feed's URL. Clearing the fetch state makes the next fetch
+-- request the whole Feed, so its current items enter the Queue as a new Feed's do.
+UPDATE feeds
+SET removed_at = NULL, last_fetched_at = NULL, etag = NULL, last_modified = NULL,
+    last_fetch_error = NULL, last_fetch_error_at = NULL, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND removed_at IS NOT NULL
+RETURNING *;
 
 -- name: DeleteFeedFollow :exec
 DELETE FROM feed_follows WHERE feed_follows.user_id = ? AND feed_follows.feed_id = (SELECT id FROM feeds WHERE url = ?);
@@ -46,8 +59,8 @@ LIMIT 1;
 
 -- name: GetFeedsToFetch :many
 SELECT * FROM feeds
-WHERE last_fetched_at IS NULL
-   OR last_fetched_at < ?
+WHERE removed_at IS NULL
+AND (last_fetched_at IS NULL OR last_fetched_at < ?)
 ORDER BY (last_fetched_at IS NOT NULL), last_fetched_at ASC;
 
 -- name: UpdateFeedConditionalHeaders :exec

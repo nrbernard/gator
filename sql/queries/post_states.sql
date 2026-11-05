@@ -6,13 +6,19 @@ LEFT JOIN post_states ON post_states.post_id = posts.id AND post_states.user_id 
 WHERE posts.id = @post_id;
 
 -- name: GetNextQueuePost :one
+-- The Queue is the Posts with no state from Feeds the user follows and hasn't
+-- removed; every Queue query below repeats that feed_id filter.
 -- The newest Post from a followed Feed that has no state and that gator
 -- fetched at or before the cutoff: the top of the Queue. Later Posts are new,
 -- behind the chip. datetime() compares at whole seconds, as trash all does.
 SELECT posts.id, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id, feeds.name AS feed_name
 FROM posts
 JOIN feeds ON feeds.id = posts.feed_id
-WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+WHERE posts.feed_id IN (
+    SELECT feed_follows.feed_id FROM feed_follows
+    JOIN feeds AS followed ON followed.id = feed_follows.feed_id
+    WHERE feed_follows.user_id = @user_id AND followed.removed_at IS NULL
+)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
 AND datetime(posts.created_at) <= datetime(@cutoff)
 ORDER BY posts.published_at DESC
@@ -22,7 +28,11 @@ LIMIT 1;
 -- The Queue Posts gator fetched after the cutoff: the new Posts the chip counts.
 SELECT COUNT(*)
 FROM posts
-WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+WHERE posts.feed_id IN (
+    SELECT feed_follows.feed_id FROM feed_follows
+    JOIN feeds AS followed ON followed.id = feed_follows.feed_id
+    WHERE feed_follows.user_id = @user_id AND followed.removed_at IS NULL
+)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
 AND datetime(posts.created_at) > datetime(@cutoff);
 
@@ -40,7 +50,11 @@ LIMIT 1;
 -- datetime() compares at whole seconds, CURRENT_TIMESTAMP's resolution.
 SELECT COUNT(*)
 FROM posts
-WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+WHERE posts.feed_id IN (
+    SELECT feed_follows.feed_id FROM feed_follows
+    JOIN feeds AS followed ON followed.id = feed_follows.feed_id
+    WHERE feed_follows.user_id = @user_id AND followed.removed_at IS NULL
+)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
 AND datetime(posts.created_at) <= datetime(@cutoff);
 
@@ -49,7 +63,11 @@ AND datetime(posts.created_at) <= datetime(@cutoff);
 INSERT INTO post_states (user_id, post_id, place, trashed_from, changed_at)
 SELECT @user_id, posts.id, 'trash', 'queue', @changed_at
 FROM posts
-WHERE posts.feed_id IN (SELECT feed_follows.feed_id FROM feed_follows WHERE feed_follows.user_id = @user_id)
+WHERE posts.feed_id IN (
+    SELECT feed_follows.feed_id FROM feed_follows
+    JOIN feeds AS followed ON followed.id = feed_follows.feed_id
+    WHERE feed_follows.user_id = @user_id AND followed.removed_at IS NULL
+)
 AND NOT EXISTS (SELECT 1 FROM post_states WHERE post_states.post_id = posts.id AND post_states.user_id = @user_id)
 AND datetime(posts.created_at) <= datetime(@cutoff);
 

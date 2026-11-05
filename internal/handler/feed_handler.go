@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -91,13 +92,17 @@ func (h *FeedHandler) Create(c echo.Context) error {
 }
 
 func (h *FeedHandler) Delete(c echo.Context) error {
-	feedID := c.Param("id")
-	if feedID == "" {
-		return fmt.Errorf("failed to get feed id")
+	feedID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "feed not found")
 	}
 
-	if err := h.FeedService.DeleteFeed(c.Request().Context(), uuid.MustParse(feedID)); err != nil {
-		return c.String(http.StatusNotFound, "failed to delete feed")
+	err = h.FeedService.RemoveFeed(c.Request().Context(), feedID)
+	if errors.Is(err, service.ErrFeedNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound, "feed not found")
+	}
+	if err != nil {
+		return err
 	}
 
 	return c.NoContent(http.StatusOK)
